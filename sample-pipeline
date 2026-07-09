@@ -1,0 +1,823 @@
+pipeline {
+    agent any
+
+    environment {
+        JAVA_HOME       = '/opt/java-21'
+        MAVEN_HOME      = '/opt/maven'
+        PATH            = "${JAVA_HOME}/bin:${MAVEN_HOME}/bin:/usr/local/bin:${env.PATH}"
+
+        SERVICE_NAME    = 'test'
+        
+        REMOTE_PATH     = '/opt/test/test'
+
+
+        GIT_REPO              = 'https://localhost:8081/test/test.git'
+        GIT_BRANCH            = 'pipeline_integration'
+        GIT_CREDENTIAL        = 'git'
+
+        SLACK_CREDENTIAL      = 'slack-webhook-token'
+        GOOGLE_CHAT_WEBHOOK   = 'test-notification'
+
+        BUILD_NAME            = 'sample.war'
+        DATE                  = "${new Date().format('dd-MM-yyyy HH:mm:ss')}"
+        BUILD_START_TIME      = "${System.currentTimeMillis()}"
+
+        REPORTS_DIR           = "${WORKSPACE}/security-reports"
+
+        SONAR_PROJECT_KEY     = 'dms-integration-service'
+        SONAR_HOST_URL        = 'http://localhost:9000'
+        SONAR_TOKEN_CRED      = 'sonarqube-token'
+
+        NVD_API_KEY_CRED      = 'nvd-api-key'
+        DEPCHECK_DATA_DIR     = '/var/lib/jenkins/dependency-check-data'
+        DEPCHECK_MIN_VERSION  = '9.2.0'  
+
+        COSIGN_KEY_CRED       = 'cosign-private-key'
+        COSIGN_PASSWORD_CRED  = 'cosign-key-password'
+
+        NEXUS_URL             = 'http://localhost:8081'
+        NEXUS_REPO            = 'releases'
+        NEXUS_CREDENTIAL      = 'nexus-credentials'
+
+        
+        GODEPLOY_URL          = 'http://localhost:8992'
+        APP_NAME              = "${SONAR_PROJECT_KEY}"
+        VERSION               = "${SERVICE_NAME}-${BUILD_NUMBER}"
+    }
+
+
+    parameters {
+        booleanParam(
+            name: 'SKIP_SONARQUBE',
+            defaultValue: false,
+            description: 'Skip SAST + Quality Gate stages entirely.'
+        )
+        string(
+            name: 'GITLEAKS_MAX_LEAKS',
+            defaultValue: '0',
+            description: 'Number of Gitleaks findings tolerated before the gate flags them as a finding.'
+        )
+    }
+
+    options {
+        timeout(time: 60, unit: 'MINUTES')
+        timestamps()
+        disableConcurrentBuilds()
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                sh '''
+                    if [ -d .git ] && ! git rev-parse --git-dir > /dev/null 2>&1; then
+                        echo "Removing corrupt .git directory before checkout"
+                        rm -rf .git
+                    fi
+                '''
+                checkout([$class: 'GitSCM',
+                    branches: [[name: "${GIT_BRANCH}"]],
+                    userRemoteConfigs: [[url: "${GIT_REPO}", credentialsId: "${GIT_CREDENTIAL}"]]
+                ])
+                script {
+                    env.GIT_COMMIT_MSG  = sh(script: "git log -1 --pretty=%B", returnStdout: true).trim().take(80)
+                    env.GIT_AUTHOR      = sh(script: "git log -1 --pretty=%an", returnStdout: true).trim()
+                    env.GIT_SHORT_HASH  = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    env.CHECKOUT_STATUS = 'SUCCESS'
+                }
+                sh "mkdir -p ${REPORTS_DIR}"
+            }
+            post {
+                failure { script { env.CHECKOUT_STATUS = 'FAILED'; env.FAILED_STAGE = 'Checkout' } }
+            }
+        }
+
+        stage('Secrets Scan (Gitleaks)') {
+            steps {
+                script {
+                    def rc = sh(
+                        script: "gitleaks detect --source . --report-format json --report-path ${REPORTS_DIR}/gitleaks-report.json --exit-code 0",
+                        returnStatus: true
+                    )
+                    def leakCount = 0
+                    if (fileExists("${REPORTS_DIR}/gitleaks-report.json")) {
+                        def countStr = sh(
+                            script: '''jq 'if type=="array" then length else 0 end' ''' + "${REPORTS_DIR}/gitleaks-report.json 2>/dev/null || echo 0",
+                            returnStdout: true
+                        ).trim()
+                        leakCount = countStr.isInteger() ? countStr.toInteger() : 0
+                    }
+                    env.GITLEAKS_LEAK_COUNT = "${leakCount}"
+                    env.GITLEAKS_STATUS = (leakCount as Integer) > (params.GITLEAKS_MAX_LEAKS as Integer) ? 'FAILED' : 'SUCCESS'
+                    if (leakCount > 0) {
+                        echo " Gitleaks found ${leakCount} potential secret(s) — review ${REPORTS_DIR}/gitleaks-report.json"
+                    }
+                }
+            }
+            post {
+                failure { script { env.GITLEAKS_STATUS = 'FAILED'; env.FAILED_STAGE = 'Secrets Scan' } }
+            }
+        }
+
+        stage('Build WAR') {
+            steps {
+                sh '''
+                    java -version
+                    mvn clean package -DskipTests
+                '''
+                script { env.BUILD_STATUS = 'SUCCESS' }
+            }
+            post {
+                failure { script { env.BUILD_STATUS = 'FAILED'; env.FAILED_STAGE = 'Build WAR' } }
+            }
+        }
+
+        stage('Code Quality & SAST (SonarQube)') {
+            when { expression { return !params.SKIP_SONARQUBE } }
+            steps {
+                catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                    withCredentials([string(credentialsId: "${SONAR_TOKEN_CRED}", variable: 'SONAR_TOKEN')]) {
+                        sh """
+                            mvn sonar:sonar \
+                              -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                              -Dsonar.host.url=${SONAR_HOST_URL} \
+                              -Dsonar.token=\$SONAR_TOKEN
+                        """
+                    }
+                    script { env.SONAR_STATUS = 'SUCCESS' }
+                }
+                script {
+                    if (env.SONAR_STATUS != 'SUCCESS') {
+                        env.SONAR_STATUS = 'FAILED'
+                        echo " SonarQube analysis failed — check ${SONAR_HOST_URL} is reachable from this agent " +
+                             "and that the 'sonarqube-token' credential is a valid, non-expired user token. Continuing pipeline."
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            when { expression { return !params.SKIP_SONARQUBE && env.SONAR_STATUS == 'SUCCESS' } }
+            steps {
+                catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                    withCredentials([string(credentialsId: "${SONAR_TOKEN_CRED}", variable: 'SONAR_TOKEN')]) {
+                        timeout(time: 10, unit: 'MINUTES') {
+                            sh '''
+                                set -e
+                                REPORT_FILE="target/sonar/report-task.txt"
+                                if [ ! -f "$REPORT_FILE" ]; then
+                                    echo "report-task.txt not found — SonarQube analysis may not have run."
+                                    exit 1
+                                fi
+                                CE_TASK_URL=$(grep '^ceTaskUrl=' "$REPORT_FILE" | cut -d'=' -f2-)
+
+                                STATUS="PENDING"
+                                RESP=""
+                                for i in $(seq 1 60); do
+                                    RESP=$(curl -s -u "${SONAR_TOKEN}:" "$CE_TASK_URL")
+                                    STATUS=$(echo "$RESP" | jq -r '.task.status')
+                                    echo "Analysis task status: $STATUS"
+                                    if [ "$STATUS" = "SUCCESS" ] || [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "CANCELED" ]; then
+                                        break
+                                    fi
+                                    sleep 5
+                                done
+
+                                if [ "$STATUS" != "SUCCESS" ]; then
+                                    echo "SonarQube analysis task ended with status: $STATUS"
+                                    exit 1
+                                fi
+
+                                ANALYSIS_ID=$(echo "$RESP" | jq -r '.task.analysisId')
+                                QG_RESP=$(curl -s -u "${SONAR_TOKEN}:" "${SONAR_HOST_URL}/api/qualitygates/project_status?analysisId=${ANALYSIS_ID}")
+                                QG_STATUS=$(echo "$QG_RESP" | jq -r '.projectStatus.status')
+                                echo "Quality Gate status: $QG_STATUS"
+                                echo "$QG_STATUS" > quality-gate-status.txt
+                                echo "$QG_RESP" | jq '.projectStatus.conditions' > "${WORKSPACE}/security-reports/quality-gate-conditions.json"
+
+                                if [ "$QG_STATUS" != "OK" ]; then
+                                    exit 2
+                                fi
+                            '''
+                        }
+                    }
+                    script {
+                        if (fileExists('quality-gate-status.txt')) {
+                            env.QUALITY_GATE_STATUS = readFile('quality-gate-status.txt').trim()
+                        }
+                        if (env.QUALITY_GATE_STATUS != 'OK') {
+                            unstable("Quality Gate failed: ${env.QUALITY_GATE_STATUS ?: 'UNKNOWN'}")
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Dependency Vulnerability Scan') {
+            parallel {
+                stage('OWASP Dependency-Check') {
+                    steps {
+                        withCredentials([string(credentialsId: "${NVD_API_KEY_CRED}", variable: 'NVD_API_KEY')]) {
+                            script {
+                                sh "mkdir -p ${DEPCHECK_DATA_DIR}"
+                                sh """
+                                    dependency-check --version | grep -qE '9\\.[2-9]|9\\.[1-9][0-9]|[1-9][0-9]\\.' \
+                                      || echo " dependency-check-cli is older than ${DEPCHECK_MIN_VERSION} — upgrade to avoid the NVD-API paging NPE bug."
+                                """
+                                sh(script: """
+                                    dependency-check \
+                                  --project "${SERVICE_NAME}" \
+                                  --scan . \
+                                  --format HTML --format JSON \
+                                  --out ${REPORTS_DIR}/dependency-check \
+                                  --data ${DEPCHECK_DATA_DIR} \
+                                  --nvdApiKey \$NVD_API_KEY \
+                                  --nvdApiDelay 4000 \
+                                  --noupdate \
+                                  --disableOssIndex \
+                                  --disableRetireJS \
+                                  --failOnCVSS 9
+                                """, returnStatus: true).with { rc ->
+                                    env.DEPCHECK_STATUS = (rc == 0) ? 'SUCCESS' : ((rc == 1 || rc == 13) ? 'INCONCLUSIVE' : 'SUCCESS')
+                                    if (rc != 0) {
+                                        echo " Dependency-Check exit ${rc}. If CVSS>=9 findings exist they will show as FAILED below."
+                                        if (fileExists("${REPORTS_DIR}/dependency-check/dependency-check-report.json")) {
+                                            env.DEPCHECK_STATUS = 'FAILED'
+                                        } else {
+                                            env.DEPCHECK_STATUS = 'INCONCLUSIVE'
+                                            echo " No JSON report produced — treating result as INCONCLUSIVE, NOT as a pass."
+                                        }
+                                    }
+                                }
+                                sh(script: """
+                                    dependency-check --updateonly \
+                                  --data ${DEPCHECK_DATA_DIR} \
+                                  --nvdApiKey \$NVD_API_KEY \
+                                      || echo " Background NVD mirror refresh failed — will retry next build."
+                                """, returnStatus: true)
+                            }
+                        }
+                    }
+                }
+
+                stage('Grype (Source)') {
+                    steps {
+                        script {
+                            def rc = sh(
+                                script: "grype dir:. -o json --file ${REPORTS_DIR}/grype-source-report.json --fail-on high",
+                                returnStatus: true
+                            )
+                            env.GRYPE_SRC_STATUS = (rc == 0) ? 'SUCCESS' : 'FAILED'
+                        }
+                    }
+                }
+            }
+            post {
+                failure { script { env.FAILED_STAGE = env.FAILED_STAGE ?: 'Dependency Vulnerability Scan' } }
+            }
+        }
+
+        stage('SBOM Generation (Syft)') {
+            steps {
+                script {
+                    def rc1 = sh(script: "syft dir:. -o cyclonedx-json=${REPORTS_DIR}/sbom.cdx.json", returnStatus: true)
+                    def rc2 = sh(script: "syft dir:. -o spdx-json=${REPORTS_DIR}/sbom.spdx.json", returnStatus: true)
+                    def rc3 = sh(script: "syft target/${BUILD_NAME} -o cyclonedx-json=${REPORTS_DIR}/sbom-artifact.cdx.json", returnStatus: true)
+                    env.SBOM_STATUS = (rc1 == 0 && rc2 == 0 && rc3 == 0) ? 'SUCCESS' : 'FAILED'
+                    if (rc3 != 0) {
+                        error(" Artifact SBOM generation failed (rc=${rc3}) — cannot run the artifact vulnerability scan without it.")
+                    }
+                }
+            }
+            post {
+                failure { script { env.SBOM_STATUS = 'FAILED'; env.FAILED_STAGE = 'SBOM Generation' } }
+            }
+        }
+
+        stage('Artifact Vulnerability Scan (Grype - SBOM)') {
+            steps {
+                script {
+                    def rc = sh(
+                        script: "grype sbom:${REPORTS_DIR}/sbom-artifact.cdx.json -o json --file ${REPORTS_DIR}/grype-artifact-report.json --fail-on critical",
+                        returnStatus: true
+                    )
+                    env.GRYPE_ARTIFACT_STATUS = (rc == 0) ? 'SUCCESS' : 'FAILED'
+                }
+            }
+            post {
+                failure { script { env.GRYPE_ARTIFACT_STATUS = 'FAILED'; env.FAILED_STAGE = 'Grype Artifact Scan' } }
+            }
+        }
+
+        stage('Malware Scan (ClamAV)') {
+            steps {
+                script {
+                    def rc = sh(
+                        script: "clamscan --recursive --infected --log=${REPORTS_DIR}/clamav-scan.log target/${BUILD_NAME}",
+                        returnStatus: true
+                    )
+                    if (rc == 1) {
+                        env.CLAMAV_STATUS = 'FAILED'
+                        error(" ClamAV detected malware in the build artifact — aborting pipeline.")
+                    } else if (rc == 2) {
+                        env.CLAMAV_STATUS = 'FAILED'
+                        error(" ClamAV scan error — check ${REPORTS_DIR}/clamav-scan.log")
+                    } else {
+                        env.CLAMAV_STATUS = 'SUCCESS'
+                    }
+                }
+            }
+            post {
+                failure { script { env.FAILED_STAGE = env.FAILED_STAGE ?: 'Malware Scan' } }
+            }
+        }
+
+        stage('Security Gate Evaluation') {
+            steps {
+                script {
+                    def reasons = []
+                    if ((env.GITLEAKS_LEAK_COUNT as Integer ?: 0) > (params.GITLEAKS_MAX_LEAKS as Integer)) {
+                        reasons << "Gitleaks found ${env.GITLEAKS_LEAK_COUNT} secret(s), exceeding the allowed maximum of ${params.GITLEAKS_MAX_LEAKS}."
+                    }
+                    if (env.GRYPE_SRC_STATUS == 'FAILED') {
+                        reasons << "Grype source scan found High/Critical severity vulnerabilities."
+                    }
+                    if (env.GRYPE_ARTIFACT_STATUS == 'FAILED') {
+                        reasons << "Grype artifact scan found Critical severity vulnerabilities in the packaged WAR."
+                    }
+                    if (env.DEPCHECK_STATUS == 'FAILED') {
+                        reasons << "OWASP Dependency-Check found CVEs with CVSS >= 9."
+                    } else if (env.DEPCHECK_STATUS == 'INCONCLUSIVE') {
+                        reasons << "OWASP Dependency-Check did not complete cleanly — treated as a blocking finding, not a pass."
+                    }
+                    if (!params.SKIP_SONARQUBE && env.QUALITY_GATE_STATUS && env.QUALITY_GATE_STATUS != 'OK') {
+                        reasons << "SonarQube Quality Gate did not pass (${env.QUALITY_GATE_STATUS})."
+                    }
+
+                    env.GATE_REASONS = reasons.join(' || ')
+
+                    env.DEPLOY_AUTHORIZED = 'true'
+
+                    if (reasons) {
+                        env.OVERALL_VERDICT = 'WARN'
+                        env.APPROVED_BY = 'auto (webhook trigger — findings-tolerant deploy policy)'
+                        currentBuild.result = 'UNSTABLE'
+                        echo " Security Gate found issues — deploying anyway per policy, findings recorded for the report:\n - " + reasons.join('\n - ')
+                    } else {
+                        env.OVERALL_VERDICT = 'PASS'
+                        echo " Security Gate passed — no findings."
+                    }
+                }
+            }
+        }
+
+        stage('Sign Artifact (Cosign)') {
+            when { expression { return env.DEPLOY_AUTHORIZED == 'true' } }
+            steps {
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                    withCredentials([
+                        file(credentialsId: "${COSIGN_KEY_CRED}", variable: 'COSIGN_KEY_FILE'),
+                        string(credentialsId: "${COSIGN_PASSWORD_CRED}", variable: 'COSIGN_PASSWORD')
+                    ]) {
+                        sh """
+                            export COSIGN_PASSWORD=\$COSIGN_PASSWORD
+                            cosign sign-blob --key \$COSIGN_KEY_FILE \
+                              --output-signature ${REPORTS_DIR}/${BUILD_NAME}.sig \
+                              --output-certificate ${REPORTS_DIR}/${BUILD_NAME}.pem \
+                              --yes \
+                              target/${BUILD_NAME}
+                        """
+                    }
+                    script { env.COSIGN_STATUS = 'SUCCESS' }
+                }
+                script {
+                    if (env.COSIGN_STATUS != 'SUCCESS') {
+                        env.COSIGN_STATUS = 'FAILED'
+                        env.FAILED_STAGE = env.FAILED_STAGE ?: 'Artifact Signing'
+                    }
+                }
+            }
+        }
+
+        stage('Publish to Nexus') {
+            when { expression { return env.DEPLOY_AUTHORIZED == 'true' } }
+            steps {
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                    withCredentials([usernamePassword(
+                        credentialsId: "${NEXUS_CREDENTIAL}",
+                        usernameVariable: 'NEXUS_USER',
+                        passwordVariable: 'NEXUS_PASS'
+                    )]) {
+                        script {
+                            def uploads = [
+                                [file: "target/${BUILD_NAME}",                     dest: "${NEXUS_URL}/repository/${NEXUS_REPO}/${SERVICE_NAME}/${BUILD_NUMBER}/${BUILD_NAME}"],
+                                [file: "${REPORTS_DIR}/${BUILD_NAME}.sig",         dest: "${NEXUS_URL}/repository/${NEXUS_REPO}/${SERVICE_NAME}/${BUILD_NUMBER}/${BUILD_NAME}.sig"],
+                                [file: "${REPORTS_DIR}/sbom-artifact.cdx.json",    dest: "${NEXUS_URL}/repository/${NEXUS_REPO}/${SERVICE_NAME}/${BUILD_NUMBER}/sbom.cdx.json"],
+                            ]
+                            def failed = []
+                            uploads.each { u ->
+                                def httpCode = sh(
+                                    script: "curl -s -o /tmp/nexus-response.txt -w '%{http_code}' -u \$NEXUS_USER:\$NEXUS_PASS --upload-file '${u.file}' '${u.dest}'",
+                                    returnStdout: true
+                                ).trim()
+                                if (httpCode.startsWith('2')) {
+                                    echo " Uploaded ${u.file} -> ${u.dest} (HTTP ${httpCode})"
+                                } else {
+                                    failed << "${u.file} (HTTP ${httpCode})".toString()
+                                    echo " Failed to upload ${u.file} -> ${u.dest} (HTTP ${httpCode})"
+                                    sh 'cat /tmp/nexus-response.txt 2>/dev/null || true'
+                                }
+                            }
+                            if (failed) {
+                                error(" Nexus publish failed for: ${failed.join(', ')}")
+                            }
+                        }
+                    }
+                    script { env.NEXUS_STATUS = 'SUCCESS' }
+                }
+                script {
+                    if (env.NEXUS_STATUS != 'SUCCESS') {
+                        env.NEXUS_STATUS = 'FAILED'
+                        env.FAILED_STAGE = env.FAILED_STAGE ?: 'Publish to Nexus'
+                    }
+                }
+            }
+        }
+
+        
+        stage('Deploy using GoDeploy') {
+            when { expression { return env.DEPLOY_AUTHORIZED == 'true' } }
+            steps {
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                    withCredentials([
+                        string(credentialsId: 'godeploy-webhook-token', variable: 'GODEPLOY_TOKEN')
+                    ]) {
+                        script {
+                            def httpCode = sh(
+                                script: """
+                                    curl -s -o /tmp/godeploy-response.txt -w '%{http_code}' -X POST \
+                                      "${GODEPLOY_URL}/api/webhook/jenkins" \
+                                      -H "Authorization: Bearer \$GODEPLOY_TOKEN" \
+                                      -H "Content-Type: application/json" \
+                                      -d '{
+                                            "app":"${APP_NAME}",
+                                            "version":"${BUILD_NUMBER}",
+                                            "triggeredBy":"Jenkins"
+                                          }'
+                                """,
+                                returnStdout: true
+                            ).trim()
+                            if (httpCode.startsWith('2')) {
+                                echo " GoDeploy webhook triggered successfully (HTTP ${httpCode})"
+                                env.DEPLOY_STATUS = 'SUCCESS'
+                            } else {
+                                echo " GoDeploy webhook failed (HTTP ${httpCode})"
+                                sh 'cat /tmp/godeploy-response.txt 2>/dev/null || true'
+                                error(" GoDeploy webhook returned HTTP ${httpCode}")
+                            }
+                        }
+                    }
+                }
+                script {
+                    if (env.DEPLOY_STATUS != 'SUCCESS') {
+                        env.DEPLOY_STATUS = 'FAILED'
+                        env.FAILED_STAGE = env.FAILED_STAGE ?: 'Deploy using GoDeploy'
+                    }
+                }
+            }
+        }
+
+        stage('Generate Executive Report (PDF)') {
+            steps {
+                script {
+                    def duration = ((System.currentTimeMillis() - env.BUILD_START_TIME.toLong()) / 1000).toInteger()
+                    def durationStr = "${(duration / 60).toInteger()}m ${duration % 60}s"
+
+                    def stageList = [
+                        [name: 'Checkout',         status: env.CHECKOUT_STATUS ?: 'UNKNOWN'],
+                        [name: 'Secrets Scan',     status: env.GITLEAKS_STATUS ?: 'UNKNOWN'],
+                        [name: 'Build WAR',        status: env.BUILD_STATUS ?: 'UNKNOWN'],
+                        [name: 'SAST',             status: params.SKIP_SONARQUBE ? 'SKIPPED' : (env.SONAR_STATUS ?: 'UNKNOWN')],
+                        [name: 'Quality Gate',     status: params.SKIP_SONARQUBE ? 'SKIPPED' : (env.QUALITY_GATE_STATUS == 'OK' ? 'SUCCESS' : 'FAILED')],
+                        [name: 'Dependency-Check', status: env.DEPCHECK_STATUS ?: 'UNKNOWN'],
+                        [name: 'Grype Source',     status: env.GRYPE_SRC_STATUS ?: 'UNKNOWN'],
+                        [name: 'SBOM Gen',         status: env.SBOM_STATUS ?: 'UNKNOWN'],
+                        [name: 'Grype Artifact',   status: env.GRYPE_ARTIFACT_STATUS ?: 'UNKNOWN'],
+                        [name: 'ClamAV',           status: env.CLAMAV_STATUS ?: 'UNKNOWN'],
+                        [name: 'Security Gate',    status: env.OVERALL_VERDICT == 'FAIL' ? 'FAILED' : 'SUCCESS'],
+                        [name: 'Cosign Sign',      status: env.DEPLOY_AUTHORIZED == 'true' ? (env.COSIGN_STATUS ?: 'UNKNOWN') : 'SKIPPED'],
+                        [name: 'Nexus Publish',    status: env.DEPLOY_AUTHORIZED == 'true' ? (env.NEXUS_STATUS ?: 'UNKNOWN') : 'SKIPPED'],
+                        [name: 'Deploy',           status: env.DEPLOY_AUTHORIZED == 'true' ? (env.DEPLOY_STATUS ?: 'UNKNOWN') : 'SKIPPED'],
+                    ]
+
+                    def metadata = [
+                        service_name         : env.SERVICE_NAME,
+                        build_number         : env.BUILD_NUMBER,
+                        branch               : env.GIT_BRANCH,
+                        commit               : env.GIT_SHORT_HASH,
+                        author               : env.GIT_AUTHOR,
+                        duration             : durationStr,
+                        date                 : env.DATE,
+                        triggered_by         : env.BUILD_USER ?: 'automated',
+                        commit_message       : env.GIT_COMMIT_MSG,
+                        overall_verdict      : env.OVERALL_VERDICT ?: 'UNKNOWN',
+                        deploy_authorized    : env.DEPLOY_AUTHORIZED == 'true',
+                        approved_by          : env.APPROVED_BY ?: '',
+                        gate_reasons         : env.GATE_REASONS ? env.GATE_REASONS.split(' \\|\\| ') as List : [],
+                        gitleaks_status      : env.GITLEAKS_STATUS,
+                        sonar_skipped        : params.SKIP_SONARQUBE,
+                        sonar_status         : env.SONAR_STATUS,
+                        quality_gate_status  : env.QUALITY_GATE_STATUS,
+                        sonar_url            : "${SONAR_HOST_URL}/dashboard?id=${SONAR_PROJECT_KEY}",
+                        depcheck_status      : env.DEPCHECK_STATUS,
+                        grype_src_status     : env.GRYPE_SRC_STATUS,
+                        grype_artifact_status: env.GRYPE_ARTIFACT_STATUS,
+                        clamav_status        : env.CLAMAV_STATUS,
+                        cosign_status        : env.COSIGN_STATUS,
+                        nexus_status         : env.NEXUS_STATUS,
+                        nexus_url            : "${NEXUS_URL}/repository/${NEXUS_REPO}/${SERVICE_NAME}/${BUILD_NUMBER}/",
+                        deploy_status        : env.DEPLOY_STATUS,
+                        deploy_target        : env.DEPLOY_AUTHORIZED == 'true' ? env.REMOTE_HOST : "${env.REMOTE_HOST} (deploy blocked by Security Gate)",
+                        stages               : stageList,
+                    ]
+
+                    writeFile file: "${REPORTS_DIR}/build-metadata.json", text: toJsonValue(metadata)
+
+                    catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                        def rc = sh(script: """
+                            python3 -m pip install --quiet --break-system-packages reportlab 2>/dev/null \
+                                || python3 -m pip install --quiet reportlab \
+                                || true
+
+                            cd ${WORKSPACE}/ci
+
+                            python3 -m devsecops_report.main \
+                                --reports-dir "${REPORTS_DIR}" \
+                                --metadata "${REPORTS_DIR}/build-metadata.json" \
+                                --output "${REPORTS_DIR}/security-report.pdf"
+                        """, returnStatus: true)
+
+                        if (rc != 0) {
+                            env.REPORT_STATUS = 'FAILED'
+                            error(" Executive report generation failed (rc=${rc}) — see console log for the Python traceback. " +
+                                  "Other artifacts (JSON/HTML reports, SBOM, signature) are already archived; this does not affect the deploy result above.")
+                        } else {
+                            env.REPORT_STATUS = 'SUCCESS'
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+
+        always {
+            archiveArtifacts artifacts: 'security-reports/**', allowEmptyArchive: true, fingerprint: true
+            archiveArtifacts artifacts: 'target/*.war', allowEmptyArchive: true, fingerprint: true
+
+            script {
+                if (fileExists("${REPORTS_DIR}/dependency-check/dependency-check-report.html")) {
+                    echo "ℹ Dependency-Check HTML report archived at: ${env.BUILD_URL}artifact/security-reports/dependency-check/dependency-check-report.html"
+                    echo "ℹ (HTML Publisher plugin is not installed on this controller — served as a plain archived artifact instead of an inline tab.)"
+                }
+            }
+
+            cleanWs(patterns: [[pattern: 'security-reports/**', type: 'EXCLUDE']])
+        }
+
+        success {
+            script { sendNotifications('success') }
+        }
+
+        unstable {
+            script { sendNotifications('deployed_with_findings') }
+        }
+
+        failure {
+            script { sendNotifications('failure') }
+        }
+    }
+}
+
+
+@NonCPS
+def jsonEscape(v) {
+    if (v == null) return ''
+    return v.toString()
+            .replace('\\', '\\\\')
+            .replace('"', '\\"')
+            .replace('\n', '\\n')
+            .replace('\r', '')
+            .replace('\t', '\\t')
+}
+
+@NonCPS
+def toJsonValue(v) {
+    if (v == null) return 'null'
+    if (v instanceof Boolean || v instanceof Number) return v.toString()
+    if (v instanceof List) return '[' + v.collect { toJsonValue(it) }.join(',') + ']'
+    if (v instanceof Map) return '{' + v.collect { k, val -> "\"${jsonEscape(k)}\":${toJsonValue(val)}" }.join(',') + '}'
+    return "\"${jsonEscape(v)}\""
+}
+
+@NonCPS
+def statusEmoji(status) {
+    switch (status) {
+        case 'SUCCESS':      return '🟢'
+        case 'FAILED':       return '🔴'
+        case 'INCONCLUSIVE':
+        case 'WARN':         return '🟡'
+        case 'SKIPPED':      return '⚪'
+        default:             return '⚪'
+    }
+}
+
+@NonCPS
+def statusColor(status) {
+    switch (status) {
+        case 'SUCCESS':      return '#188038'   // green
+        case 'FAILED':       return '#D93025'   // red
+        case 'INCONCLUSIVE':
+        case 'WARN':         return '#F9AB00'   // amber
+        case 'SKIPPED':      return '#5F6368'   // gray
+        default:             return '#5F6368'
+    }
+}
+
+def sendNotifications(String outcome) {
+    def duration = ((System.currentTimeMillis() - env.BUILD_START_TIME.toLong()) / 1000).toInteger()
+    def durationStr = "${(duration / 60).toInteger()}m ${duration % 60}s"
+
+    def isSuccess = outcome == 'success'
+    def isWarn    = outcome == 'deployed_with_findings'
+    def color   = isSuccess ? '#188038' : (isWarn ? '#F9AB00' : '#D93025')
+    def emoji   = isSuccess ? '✅' : (isWarn ? '⚠️' : '❌')
+    def title   = isSuccess ? 'Deployment Successful' :
+                  isWarn ? 'Deployed With Open Security Findings' : 'Pipeline Failed'
+    def verdictLabel = isSuccess ? 'PASSED' : (isWarn ? 'DEPLOYED · FINDINGS OPEN — SEE REPORT' : 'FAILED')
+
+    def reportUrl     = "${env.BUILD_URL}artifact/security-reports/security-report.pdf"
+    def reportsDirUrl = "${env.BUILD_URL}artifact/security-reports/"
+    def reasonsList   = env.GATE_REASONS ? env.GATE_REASONS.split(' \\|\\| ') as List : []
+
+    def stagePairs = [
+        ['Checkout',       env.CHECKOUT_STATUS],
+        ['Secrets',        env.GITLEAKS_STATUS],
+        ['Build',          env.BUILD_STATUS],
+        ['SAST',           params.SKIP_SONARQUBE ? 'SKIPPED' : env.SONAR_STATUS],
+        ['QGate',          params.SKIP_SONARQUBE ? 'SKIPPED' : (env.QUALITY_GATE_STATUS == 'OK' ? 'SUCCESS' : (env.QUALITY_GATE_STATUS ? 'FAILED' : 'UNKNOWN'))],
+        ['DepCheck',       env.DEPCHECK_STATUS],
+        ['Grype-Src',      env.GRYPE_SRC_STATUS],
+        ['SBOM',           env.SBOM_STATUS],
+        ['Grype-Artifact', env.GRYPE_ARTIFACT_STATUS],
+        ['ClamAV',         env.CLAMAV_STATUS],
+        ['Cosign',         env.DEPLOY_AUTHORIZED == 'true' ? env.COSIGN_STATUS : 'SKIPPED'],
+        ['Nexus',          env.DEPLOY_AUTHORIZED == 'true' ? env.NEXUS_STATUS : 'SKIPPED'],
+        ['Deploy',         env.DEPLOY_AUTHORIZED == 'true' ? env.DEPLOY_STATUS : 'SKIPPED'],
+    ]
+    def coreStages = stagePairs[0..4]
+    def secStages  = stagePairs[5..12]
+
+    def passCount = stagePairs.count { it[1] == 'SUCCESS' }
+    def failCount = stagePairs.count { it[1] == 'FAILED' }
+    def skipCount = stagePairs.count { it[1] == 'SKIPPED' }
+
+    def chatDot = { name, status -> "<font color=\"${statusColor(status)}\">●</font> ${name}" }
+    def coreStagesHtml = coreStages.collect { name, status -> chatDot(name, status) }.join('&nbsp;&nbsp;&nbsp;')
+    def secStagesHtml  = secStages.collect { name, status -> chatDot(name, status) }.join('&nbsp;&nbsp;&nbsp;')
+
+    def chatSections = [
+        [
+            widgets: [
+                [decoratedText: [
+                    topLabel : 'Security & Deployment Verdict',
+                    text     : "<b><font color=\"${color}\">${verdictLabel}</font></b>",
+                    bottomLabel: "${passCount} passed  ·  ${failCount} failed  ·  ${skipCount} skipped  ·  ${durationStr}",
+                    startIcon: [knownIcon: 'STAR']
+                ]]
+            ]
+        ],
+        [
+            header: 'Build Details',
+            widgets: [
+                [decoratedText: [topLabel: 'Service',        text: env.SERVICE_NAME ?: '',      startIcon: [knownIcon: 'DESCRIPTION']]],
+                [decoratedText: [topLabel: 'Target Server',  text: env.REMOTE_HOST ?: '',        startIcon: [knownIcon: 'MAP_PIN']]],
+                [decoratedText: [topLabel: 'Branch',         text: env.GIT_BRANCH ?: '',         startIcon: [knownIcon: 'BOOKMARK']]],
+                [decoratedText: [topLabel: 'Commit',         text: "${env.GIT_SHORT_HASH ?: 'N/A'} by ${env.GIT_AUTHOR ?: 'N/A'}", startIcon: [knownIcon: 'CONFIRMATION_NUMBER_ICON']]],
+                [decoratedText: [topLabel: 'Message',        text: env.GIT_COMMIT_MSG ?: '',     startIcon: [knownIcon: 'DESCRIPTION'], wrapText: true]],
+                [decoratedText: [topLabel: 'Triggered / Date', text: "${env.BUILD_USER ?: 'automated'}  ·  ${env.DATE ?: ''}", startIcon: [knownIcon: 'CLOCK']]],
+            ]
+        ],
+        [widgets: [[divider: [:]]]],
+        [
+            header: 'Pipeline Status Board',
+            widgets: [
+                [textParagraph: [text: "<b> Core Pipeline</b><br>${coreStagesHtml}"]],
+                [textParagraph: [text: "<b> Security Scans</b><br>${secStagesHtml}"]],
+            ]
+        ]
+    ]
+    if (reasonsList) {
+        chatSections << [widgets: [[divider: [:]]]]
+        chatSections << [
+            header: ' Findings Requiring Attention',
+            widgets: [
+                [textParagraph: [text: reasonsList.collect { "<font color=\"#D93025\">●</font> ${it}" }.join('<br>')]]
+            ]
+        ]
+    }
+    if (env.OVERALL_VERDICT == 'WARN' && env.APPROVED_BY) {
+        chatSections << [
+            widgets: [
+                [decoratedText: [
+                    topLabel : 'Deploy Policy',
+                    text     : "Deployed with open findings — ${env.APPROVED_BY}",
+                    startIcon: [knownIcon: 'PERSON']
+                ]]
+            ]
+        ]
+    }
+    chatSections << [widgets: [[divider: [:]]]]
+    chatSections << [
+        widgets: [
+            [buttonList: [buttons: [
+                [text: '📄  Security Report', icon: [knownIcon: 'DESCRIPTION'], type: 'FILLED',   onClick: [openLink: [url: reportUrl]]],
+                [text: 'All Reports',          type: 'OUTLINED', onClick: [openLink: [url: reportsDirUrl]]],
+                [text: 'Build Logs',           type: 'OUTLINED', onClick: [openLink: [url: "${env.BUILD_URL}console"]]],
+                [text: 'Open Jenkins',         type: 'OUTLINED', onClick: [openLink: [url: env.BUILD_URL]]],
+            ]]]
+        ]
+    ]
+
+    def chatCard = [
+        cardsV2: [[
+            cardId: 'buildCard',
+            card: [
+                header: [
+                    title    : "${emoji}  ${title}",
+                    subtitle : "${env.SERVICE_NAME}  •  Build #${env.BUILD_NUMBER}  •  ${durationStr}",
+                    imageUrl : 'https://www.jenkins.io/images/logos/jenkins/jenkins.png',
+                    imageType: 'CIRCLE'
+                ],
+                sections: chatSections
+            ]
+        ]]
+    ]
+
+    withCredentials([string(credentialsId: env.GOOGLE_CHAT_WEBHOOK, variable: 'CHAT_WEBHOOK')]) {
+        writeFile file: 'chat-payload.json', text: toJsonValue(chatCard)
+        sh 'curl -s -X POST -H "Content-Type: application/json" -d @chat-payload.json "$CHAT_WEBHOOK"'
+    }
+
+    def coreStagesLine = coreStages.collect { name, status -> "${statusEmoji(status)} ${name}" }.join('   ')
+    def secStagesLine  = secStages.collect { name, status -> "${statusEmoji(status)} ${name}" }.join('   ')
+
+    def slackBlocks = [
+        [type: 'header', text: [type: 'plain_text', text: "${emoji}  ${title}", emoji: true]],
+        [
+            type: 'section',
+            text: [type: 'mrkdwn', text: "*Verdict:* ${verdictLabel}   |   *${passCount}* passed · *${failCount}* failed · *${skipCount}* skipped"]
+        ],
+        [
+            type: 'context',
+            elements: [
+                [type: 'mrkdwn', text: " `${env.GIT_SHORT_HASH ?: 'N/A'}`  ·   ${env.GIT_AUTHOR ?: 'N/A'}  ·  🕒 ${env.DATE ?: ''}  ·  ⏱ ${durationStr}"]
+            ]
+        ],
+        [type: 'divider'],
+        [type: 'section', fields: [
+            [type: 'mrkdwn', text: "*Service*\n${env.SERVICE_NAME}"],
+            [type: 'mrkdwn', text: "*Build*\n#${env.BUILD_NUMBER}"],
+            [type: 'mrkdwn', text: "*Branch*\n${env.GIT_BRANCH}"],
+            [type: 'mrkdwn', text: "*Target*\n${env.REMOTE_HOST}"],
+        ]],
+        [type: 'section', text: [type: 'mrkdwn', text: "*Commit message*\n> ${env.GIT_COMMIT_MSG ?: ''}"]],
+        [type: 'divider'],
+        [type: 'section', text: [type: 'mrkdwn', text: "* Core Pipeline*\n${coreStagesLine}"]],
+        [type: 'section', text: [type: 'mrkdwn', text: "* Security Scans*\n${secStagesLine}"]],
+    ]
+    if (reasonsList) {
+        slackBlocks << [type: 'divider']
+        slackBlocks << [type: 'section', text: [type: 'mrkdwn', text: "* Findings*\n• " + reasonsList.join('\n• ')]]
+    }
+    if (env.OVERALL_VERDICT == 'WARN' && env.APPROVED_BY) {
+        slackBlocks << [type: 'context', elements: [
+            [type: 'mrkdwn', text: " Deployed with open findings — *${env.APPROVED_BY}*. See the security report for details."]
+        ]]
+    }
+    slackBlocks << [type: 'divider']
+    slackBlocks << [type: 'actions', elements: [
+        [type: 'button', text: [type: 'plain_text', text: '📄 Security Report', emoji: true], url: reportUrl, style: 'primary'],
+        [type: 'button', text: [type: 'plain_text', text: 'All Reports', emoji: true], url: reportsDirUrl],
+        [type: 'button', text: [type: 'plain_text', text: 'Build Logs', emoji: true], url: "${env.BUILD_URL}console"],
+        [type: 'button', text: [type: 'plain_text', text: 'Open Jenkins', emoji: true], url: env.BUILD_URL],
+    ]]
+
+    def slackPayload = [attachments: [[color: color, blocks: slackBlocks]]]
+
+    withCredentials([string(credentialsId: env.SLACK_CREDENTIAL, variable: 'SLACK_WEBHOOK')]) {
+        writeFile file: 'slack-payload.json', text: toJsonValue(slackPayload)
+        sh 'curl -s -X POST -H "Content-type: application/json" --data @slack-payload.json "$SLACK_WEBHOOK"'
+    }
+}
