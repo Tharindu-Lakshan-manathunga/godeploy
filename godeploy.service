@@ -1,0 +1,31 @@
+[Unit]
+Description=godeploy — GitOps deployment controller
+Documentation=https://github.com/your-org/godeploy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=godeploy
+Group=godeploy
+WorkingDirectory=/opt/godeploy
+ExecStart=/usr/local/bin/godeploy -config /etc/godeploy/config.json
+Restart=on-failure
+RestartSec=5s
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/godeploy
+PrivateTmp=yes
+
+# Environment (set secrets here, not in config.json)
+# EnvironmentFile=/etc/godeploy/secrets.env
+# Environment=GODEPLOY_SESSION_KEY=replace-with-32+-random-bytes
+# Environment=DMS_SSH_PASSWORD=the-remote-host-ssh-password
+
+# Limits
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

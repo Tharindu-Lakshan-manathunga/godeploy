@@ -1,0 +1,67 @@
+{
+  "server": {
+    "listenAddr": ":8090",
+    "dataDir": "/var/lib/godeploy"
+  },
+  "auth": {
+    "sessionCookieName": "GODEPLOY_SESSION",
+    "sessionTTLSeconds": 86400,
+    "jenkinsWebhookToken": "set-a-long-random-shared-secret-here",
+    "bootstrapUsers": [
+      {
+        "username": "admin",
+        "password": "changeme123",
+        "role": "admin"
+      },
+      {
+        "username": "viewer",
+        "password": "viewonly456",
+        "role": "viewer"
+      }
+    ]
+  },
+  "notifications": {
+    "slackWebhookURL": "",
+    "googleChatWebhookURL": ""
+  },
+  "apps": [
+    {
+      "name": "my-service",
+      "nexus": {
+        "url": "http://192.168.2.11:8081",
+        "repo": "releases",
+        "groupPath": "com/example/my-service",
+        "artifact": "my-service.jar",
+        "username": "",
+        "password": ""
+      },
+      "cosign": {
+        "publicKeyPath": ""
+      },
+      "target": {
+        "host": "192.168.1.100",
+        "port": 22,
+        "user": "deployuser",
+        "sshKeyPath": "/etc/godeploy/keys/deploy-key",
+        "remotePath": "/opt/my-service",
+        "backupDir": "/opt/my-service/backups",
+        "serviceName": "my-service.service",
+        "binaryName": "my-service.jar",
+        "useSudo": true
+      },
+      "healthCheck": {
+        "url": "http://192.168.1.100:8080/actuator/health",
+        "timeoutSeconds": 10,
+        "retries": 6,
+        "intervalSeconds": 5
+      },
+      "syncPolicy": {
+        "mode": "manual",
+        "pollIntervalSeconds": 60,
+        "selfHeal": false
+      },
+      "keepBackups": 5,
+      "autoRollbackOnFailedHealthCheck": true
+    }
+  ]
+}
