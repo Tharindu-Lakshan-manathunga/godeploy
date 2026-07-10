@@ -1,6 +1,4 @@
-// Package config defines the declarative, GitOps-style configuration for
-// godeploy: the set of Applications it manages, where their artifacts come
-// from, where they get deployed, and how health is verified.
+
 package config
 
 import (
@@ -10,33 +8,27 @@ import (
 	"time"
 )
 
-// Nexus describes where release artifacts are published to / read from.
+
 type Nexus struct {
 	URL      string `json:"url"`
 	Repo     string `json:"repo"`
 	Username string `json:"username,omitempty"`
-	Password string `json:"password,omitempty"` // prefer env var below in production
-	// PathTemplate is a printf-style template with a single %s placeholder
-	// for the version, e.g. "myapp/%s/myapp-%s.war" style paths are built by
-	// the caller — kept simple and explicit rather than magic.
+	Password string `json:"password,omitempty"` 
 	GroupPath string `json:"groupPath"`
 	Artifact  string `json:"artifact"`
 }
 
-// Cosign holds the public key used to verify artifact signatures produced
-// by `cosign sign-blob` in the build pipeline. Verification is skipped
-// (with a loud warning) if PublicKeyPath is empty — never silently.
+
 type Cosign struct {
 	PublicKeyPath string `json:"publicKeyPath"`
 }
 
-// Target is the remote host an application is deployed onto.
 type Target struct {
 	Host           string `json:"host"`
 	Port           int    `json:"port"`
 	User           string `json:"user"`
-	SSHKeyPath     string `json:"sshKeyPath,omitempty"`     // preferred
-	PasswordEnvVar string `json:"passwordEnvVar,omitempty"` // fallback, e.g. "DMS_SSH_PASSWORD"
+	SSHKeyPath     string `json:"sshKeyPath,omitempty"`    
+	PasswordEnvVar string `json:"passwordEnvVar,omitempty"` 
 	RemotePath     string `json:"remotePath"`
 	BackupDir      string `json:"backupDir"`
 	ServiceName    string `json:"serviceName"`
@@ -44,7 +36,7 @@ type Target struct {
 	UseSudo        bool   `json:"useSudo"`
 }
 
-// HealthCheck is polled after a restart to decide SUCCESS vs auto-rollback.
+
 type HealthCheck struct {
 	URL            string `json:"url"`
 	TimeoutSeconds int    `json:"timeoutSeconds"`
@@ -66,13 +58,11 @@ func (h HealthCheck) Interval() time.Duration {
 	return time.Duration(h.IntervalSeconds) * time.Second
 }
 
-// SyncPolicy controls whether godeploy behaves purely on-demand ("manual",
-// the default — a webhook or UI click triggers a deploy) or continuously
-// reconciles against the latest published artifact ("auto", ArgoCD-style).
+
 type SyncPolicy struct {
-	Mode                string `json:"mode"` // "manual" | "auto"
+	Mode                string `json:"mode"`
 	PollIntervalSeconds int    `json:"pollIntervalSeconds"`
-	SelfHeal            bool   `json:"selfHeal"` // if true, auto re-deploy when drift is detected
+	SelfHeal            bool   `json:"selfHeal"` 
 }
 
 func (s SyncPolicy) Interval() time.Duration {
@@ -82,9 +72,7 @@ func (s SyncPolicy) Interval() time.Duration {
 	return time.Duration(s.PollIntervalSeconds) * time.Second
 }
 
-// App is one deployable service under godeploy's control — conceptually
-// equivalent to an ArgoCD Application, but the "cluster" is a systemd host
-// and the "manifest" is a signed, versioned build artifact.
+
 type App struct {
 	Name                          string      `json:"name"`
 	Nexus                         Nexus       `json:"nexus"`
@@ -128,9 +116,7 @@ type Config struct {
 	Apps          []App         `json:"apps"`
 }
 
-// ResolvedToken returns the effective API token, preferring the env var
-// (so tokens don't have to live in a checked-in config file) over the
-// inline value.
+
 func (a Auth) ResolvedToken() string {
 	if a.APITokenEnvVar != "" {
 		if v := os.Getenv(a.APITokenEnvVar); v != "" {
