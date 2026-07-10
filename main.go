@@ -1,9 +1,3 @@
-// Command godeploy is a self-contained GitOps-style continuous deployment
-// controller for services running on systemd hosts.
-//
-// Usage:
-//
-//	godeploy -config /etc/godeploy/config.json
 package main
 
 import (
@@ -59,16 +53,16 @@ func main() {
 	}
 	mux.Handle("/", http.FileServer(http.FS(staticFS)))
 
-	// Auth mode summary log
+	
 	if len(cfg.Auth.BootstrapUsers) > 0 {
-		log.Printf("🔐 username/password auth enabled (%d bootstrap user(s))", len(cfg.Auth.BootstrapUsers))
+		log.Printf("username/password auth enabled (%d bootstrap user(s))", len(cfg.Auth.BootstrapUsers))
 	} else if cfg.Auth.ResolvedToken() != "" {
-		log.Printf("🔑 bearer token auth enabled (set bootstrapUsers in config to enable login UI)")
+		log.Printf("bearer token auth enabled (set bootstrapUsers in config to enable login UI)")
 	} else {
-		log.Println("⚠️  no authentication configured — OPEN ACCESS (dev/loopback only)")
+		log.Println(" no authentication configured — OPEN ACCESS (dev/loopback only)")
 	}
 
-	log.Printf("🚀 godeploy listening on %s (%d static app(s), data dir %s)",
+	log.Printf(" godeploy listening on %s (%d static app(s), data dir %s)",
 		cfg.Server.ListenAddr, len(cfg.Apps), cfg.Server.DataDir)
 
 	server := &http.Server{Addr: cfg.Server.ListenAddr, Handler: mux}
