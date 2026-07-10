@@ -35,7 +35,6 @@ type ServiceMetrics struct {
 	Uptime      float64 `json:"uptime"` // seconds
 }
 
-// Global startTime to compute system uptime
 var startTime = time.Now()
 
 func GetSystemMetrics() SystemMetrics {
@@ -48,7 +47,7 @@ func GetSystemMetrics() SystemMetrics {
 		Uptime:    time.Since(startTime).Seconds(),
 	}
 
-	// 1. Read Load Averages
+
 	if loadBytes, err := os.ReadFile("/proc/loadavg"); err == nil {
 		fields := strings.Fields(string(loadBytes))
 		if len(fields) >= 3 {
@@ -58,7 +57,6 @@ func GetSystemMetrics() SystemMetrics {
 		}
 	}
 
-	// 2. Read Memory Info
 	if memBytes, err := os.ReadFile("/proc/meminfo"); err == nil {
 		var memTotal, memFree, memAvailable uint64
 		scanner := bufio.NewScanner(bytes.NewReader(memBytes))
@@ -86,21 +84,21 @@ func GetSystemMetrics() SystemMetrics {
 		}
 	}
 
-	// 3. Read Disk Info (via df command on /)
+
 	cmd := exec.Command("df", "-B1", "/")
 	if out, err := cmd.Output(); err == nil {
 		lines := strings.Split(string(out), "\n")
 		if len(lines) >= 2 {
 			fields := strings.Fields(lines[1])
 			if len(fields) >= 4 {
-				// fields[1] = size, fields[2] = used
+			
 				metrics.DiskTotal, _ = strconv.ParseUint(fields[1], 10, 64)
 				metrics.DiskUsed, _ = strconv.ParseUint(fields[2], 10, 64)
 			}
 		}
 	}
 
-	// 4. Calculate CPU Usage (difference between two readings)
+
 	metrics.CPUUsage = getCPUUsageLinux()
 
 	return metrics
@@ -148,9 +146,9 @@ func getCPUUsageLinux() float64 {
 	return 15.0
 }
 
-// getSimulatedSystemMetrics returns realistic fluctuating metrics for local testing on Windows
+
 func getSimulatedSystemMetrics() SystemMetrics {
-	// Make metrics look alive using sine waves combined with random fluctuations
+	
 	t := float64(time.Now().Unix() % 3600)
 	cpuBase := 25.0 + 15.0*math.Sin(t/60.0) // 10% to 40% CPU wave
 	cpuFluctuate := rand.Float64()*10.0 - 5.0
@@ -181,20 +179,18 @@ func getSimulatedSystemMetrics() SystemMetrics {
 	}
 }
 
-// GetServiceMetrics returns service usage metrics. Simulated on Windows/macOS.
+
 func GetServiceMetrics(appName string) ServiceMetrics {
 	if runtime.GOOS != "linux" {
 		return getSimulatedServiceMetrics(appName)
 	}
 
-	// For Linux, query status if possible, otherwise simulate.
-	// In production, we'd query systemctl status for systemd hosts.
 	return getSimulatedServiceMetrics(appName)
 }
 
 func getSimulatedServiceMetrics(appName string) ServiceMetrics {
 	t := float64(time.Now().Unix() % 3600)
-	// Base values depend on the app name hash to keep them stable and unique per app
+
 	hashVal := 0
 	for _, char := range appName {
 		hashVal += int(char)
