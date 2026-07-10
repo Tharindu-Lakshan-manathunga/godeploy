@@ -1,6 +1,3 @@
-// Package notify sends deployment outcome notifications to Slack and
-// Google Chat, reusing the same two channels the Jenkins pipeline already
-// posts to, so operators don't need a new place to look.
 package notify
 
 import (
@@ -22,13 +19,13 @@ func New(cfg config.Notifications) *Notifier {
 }
 
 func (n *Notifier) DeploymentFinished(app, version, status, deploymentID string) {
-	emoji := "✅"
+	emoji := ""
 	color := "#188038"
 	switch status {
 	case "FAILED":
-		emoji, color = "❌", "#D93025"
+		emoji, color = "", "#D93025"
 	case "ROLLED_BACK":
-		emoji, color = "↩️", "#F9AB00"
+		emoji, color = "", "#F9AB00"
 	}
 	text := fmt.Sprintf("%s *godeploy* — `%s` version `%s` → *%s*", emoji, app, version, status)
 
