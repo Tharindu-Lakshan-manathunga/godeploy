@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
-  /* Carbon Obsidian Palette (Human-Architected, High Premium Feel) */
+
   --bg-main: #07090e;
   --bg-sidebar: #0b0e14;
   --bg-card: rgba(16, 20, 30, 0.6);
@@ -57,19 +57,19 @@ html, body {
   line-height: 1.6;
 }
 
-/* Scrollbars */
+
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
-/* Layout Grid */
+
 #appWrapper {
   display: flex;
   min-height: 100vh;
 }
 
-/* ─── Premium Navigation Sidebar ─── */
+
 nav.sidebar {
   width: var(--sidebar-width);
   background: var(--bg-sidebar);
@@ -190,7 +190,7 @@ nav.sidebar {
   color: var(--accent);
 }
 
-/* Sidebar Health Sparklines */
+
 .sidebar-spark {
   margin-top: auto;
   padding: 12px;
@@ -299,7 +299,7 @@ nav.sidebar {
   background: rgba(248, 113, 113, 0.08);
 }
 
-/* Mobile Sidebar Drawer */
+
 .sidebar-toggle {
   display: none;
   position: fixed;
@@ -341,7 +341,7 @@ nav.sidebar {
   .gauge-row { flex-direction: column; }
 }
 
-/* ─── Content Wrapper ─── */
+
 .content-wrapper {
   margin-left: var(--sidebar-width);
   flex: 1;
@@ -351,7 +351,7 @@ nav.sidebar {
   transition: var(--transition);
 }
 
-/* ─── Header ─── */
+
 header {
   height: var(--header-height);
   border-bottom: 1px solid var(--border-color);
@@ -405,13 +405,13 @@ header {
   gap: 12px;
 }
 
-/* ─── Main Tab Content ─── */
+
 main {
   padding: 32px;
   flex: 1;
 }
 
-/* ─── Glassmorphism Panels ─── */
+
 .glass-panel {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -436,7 +436,7 @@ main {
   gap: 8px;
 }
 
-/* ─── Deployment Timeline ─── */
+
 .deploy-timeline {
   margin-bottom: 20px;
 }
@@ -478,7 +478,7 @@ main {
 .timeline-dot.failed { background: var(--danger); box-shadow: 0 0 10px var(--danger); }
 .timeline-dot.running { background: var(--accent); animation: pulse-glow 1s infinite; }
 
-/* ─── Dashboard Grid & Rack Cards ─── */
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
@@ -569,7 +569,7 @@ main {
   text-overflow: ellipsis;
 }
 
-/* Micro-Terminal Inside Card */
+
 .card-terminal {
   background: #040508;
   border: 1px solid var(--border-color);
@@ -586,7 +586,7 @@ main {
 
 .card-terminal::-webkit-scrollbar { width: 3px; }
 
-/* Dynamic Flow Pipeline Rail */
+
 .stages-rail-wrap {
   margin-bottom: 18px;
   background: var(--bg-input);
@@ -660,7 +660,7 @@ main {
   letter-spacing: 0.5px;
 }
 
-/* Forms & Inputs */
+
 input, select {
   background: var(--bg-input);
   border: 1px solid var(--border-color);
@@ -694,7 +694,7 @@ input:focus, select:focus {
   font-size: 12px;
 }
 
-/* High Fidelity Action Buttons */
+
 .btn {
   background: var(--bg-raised);
   border: 1px solid var(--border-color);
@@ -753,7 +753,7 @@ input:focus, select:focus {
   box-shadow: 0 4px 12px rgba(248, 113, 113, 0.25);
 }
 
-/* ─── Log Explorer ─── */
+
 .logs-layout {
   display: grid;
   grid-template-columns: 260px 1fr;
@@ -810,13 +810,13 @@ input:focus, select:focus {
   word-break: break-all;
 }
 
-/* Syntax Highlighting for Log Lines */
+
 .log-line.error .log-text-content { color: var(--danger); }
 .log-line.warn .log-text-content { color: var(--warning); }
 .log-line.info .log-text-content { color: var(--accent); }
 .log-line.success .log-text-content { color: var(--success); }
 
-/* ─── System Health / Gauges ─── */
+
 .gauge-row {
   display: flex;
   gap: 20px;
@@ -947,7 +947,6 @@ input:focus, select:focus {
   font-size: 12.5px;
 }
 
-/* ─── Jenkins CI Pipeline Visualizer ─── */
 .jenkins-history-layout {
   display: grid;
   grid-template-columns: 300px 1fr;
@@ -1077,7 +1076,6 @@ input:focus, select:focus {
   background: var(--accent);
 }
 
-/* ─── Command Palette Modal (Ctrl+K) ─── */
 #cmdPaletteModal {
   position: fixed;
   inset: 0;
@@ -1167,7 +1165,6 @@ input:focus, select:focus {
   border: 1px solid var(--border-color);
 }
 
-/* ─── Toast System ─── */
 #toastContainer {
   position: fixed;
   bottom: 24px;
@@ -1199,13 +1196,13 @@ input:focus, select:focus {
 .toast.warn { background: var(--warning-glow); border-color: rgba(251, 191, 36, 0.3); color: #fde68a; }
 .toast.error { background: var(--danger-glow); border-color: rgba(248, 113, 113, 0.3); color: #fecaca; }
 
-/* ─── Tables ─── */
+
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border-color); }
 th { color: var(--text-dim); font-family: var(--mono-font); text-transform: uppercase; font-size: 9px; letter-spacing: 1px; font-weight: 700; }
 tr:hover td { background: rgba(255,255,255,0.01); }
 
-/* ─── Custom UI details ─── */
+
 .event-card {
   display: flex;
   gap: 14px;
@@ -1230,7 +1227,7 @@ tr:hover td { background: rgba(255,255,255,0.01); }
 .event-icon.warn { background: var(--warning-glow); color: var(--warning); }
 .event-icon.error { background: var(--danger-glow); color: var(--danger); }
 
-/* Visibility and Tab Content Switching */
+
 .hidden {
   display: none !important;
 }
@@ -1241,7 +1238,7 @@ tr:hover td { background: rgba(255,255,255,0.01); }
   display: block !important;
 }
 
-/* ─── Login Screen Full-Page Overlay ─── */
+
 #loginScreen {
   position: fixed;
   inset: 0;
@@ -1302,10 +1299,10 @@ tr:hover td { background: rgba(255,255,255,0.01); }
 </head>
 <body>
 
-<!-- Global Toast Container -->
+
 <div id="toastContainer"></div>
 
-<!-- Command Palette Modal (Ctrl+K) -->
+
 <div id="cmdPaletteModal" onclick="closeCmdPalette()">
   <div class="cmd-box" onclick="event.stopPropagation()">
     <div class="cmd-input-wrap">
@@ -1316,13 +1313,12 @@ tr:hover td { background: rgba(255,255,255,0.01); }
   </div>
 </div>
 
-<!-- Mobile Drawer Sidebar -->
+
 <button class="sidebar-toggle" onclick="toggleSidebar()">
   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
 </button>
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
-<!-- Login Screen -->
 <div id="loginScreen">
   <div class="login-card">
     <div class="login-header">
@@ -1345,7 +1341,7 @@ tr:hover td { background: rgba(255,255,255,0.01); }
   </div>
 </div>
 
-<!-- Main Application Layout -->
+
 <div id="appWrapper" class="hidden">
   <nav class="sidebar" id="sidebarNav">
     <a href="#" class="sidebar-logo" onclick="switchTab('dashboard'); return false;">
@@ -1398,7 +1394,7 @@ tr:hover td { background: rgba(255,255,255,0.01); }
       </div>
     </div>
 
-    <!-- Live Sidebar Health Sparklines -->
+
     <div class="sidebar-spark">
       <div class="spark-row">
         <span>sys.cpu</span>
@@ -1454,7 +1450,7 @@ tr:hover td { background: rgba(255,255,255,0.01); }
     </header>
 
     <main>
-      <!-- DASHBOARD SERVICES GRID -->
+
       <div id="tab-dashboard" class="tab-content active">
         <div id="deployTimeline" class="deploy-timeline" style="display:none;">
           <div class="timeline-bar" id="timelineBar"></div>
@@ -1462,7 +1458,7 @@ tr:hover td { background: rgba(255,255,255,0.01); }
         <div class="dashboard-grid" id="grid"></div>
       </div>
 
-      <!-- TELEMETRY & RESOURCES -->
+   
       <div id="tab-metrics" class="tab-content">
         <div class="gauge-row">
           <div class="gauge-card">
@@ -1528,7 +1524,7 @@ tr:hover td { background: rgba(255,255,255,0.01); }
         </div>
       </div>
 
-      <!-- JENKINS CI BUILD HISTORY -->
+
       <div id="tab-jenkins" class="tab-content">
         <div class="jenkins-history-layout">
           <div>
@@ -1548,7 +1544,7 @@ tr:hover td { background: rgba(255,255,255,0.01); }
         </div>
       </div>
 
-      <!-- CENTRAL LOG TERMINAL -->
+
       <div id="tab-logs" class="tab-content">
         <div class="logs-layout">
           <div class="log-sidebar">
@@ -1595,7 +1591,6 @@ tr:hover td { background: rgba(255,255,255,0.01); }
         </div>
       </div>
 
-      <!-- TEAM AUDIT DESK -->
       <div id="tab-team" class="tab-content">
         <div class="glass-panel">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
@@ -1629,7 +1624,7 @@ tr:hover td { background: rgba(255,255,255,0.01); }
         </div>
       </div>
 
-      <!-- INTEGRATIONS & SETTINGS -->
+
       <div id="tab-settings" class="tab-content">
         <div class="glass-panel" style="max-width:720px;">
           <h3>Webhook Notification Alerts</h3>
@@ -1652,7 +1647,7 @@ tr:hover td { background: rgba(255,255,255,0.01); }
         </div>
       </div>
 
-      <!-- RHEL DEPLOYBLUEPRINT -->
+
       <div id="tab-rhel" class="tab-content">
         <div style="display:grid; grid-template-columns:250px 1fr; gap:24px;">
           <div class="log-sidebar" style="height:auto;">
@@ -1705,7 +1700,7 @@ tr:hover td { background: rgba(255,255,255,0.01); }
   </div>
 </div>
 
-<!-- Add/Edit Service Modal -->
+
 <div class="modal-overlay" id="appModalOverlay">
   <div class="modal">
     <div class="modal-head">
@@ -1720,7 +1715,7 @@ tr:hover td { background: rgba(255,255,255,0.01); }
   </div>
 </div>
 
-<!-- Create User Modal -->
+
 <div class="modal-overlay" id="createUserModalOverlay">
   <div class="modal" style="width:400px;">
     <div class="modal-head">
@@ -1751,7 +1746,7 @@ tr:hover td { background: rgba(255,255,255,0.01); }
   </div>
 </div>
 
-<!-- Deployment history/Rollback Modal -->
+
 <div class="modal-overlay" id="historyModalOverlay">
   <div class="modal" style="width:700px;">
     <div class="modal-head">
@@ -1779,7 +1774,7 @@ tr:hover td { background: rgba(255,255,255,0.01); }
 </div>
 
 <script>
-// ── Core Application State & Auth ──────────────────────────────────────────
+
 const STAGES = ['Fetch', 'Verify', 'Backup', 'Ship', 'Restart', 'Health', 'Done'];
 let currentUser = null;
 let currentAppList = [];
@@ -1793,20 +1788,18 @@ let isLogStreamPaused = false;
 let sessionStartTime = null;
 let uptimeInterval = null;
 
-// Auth fallback tokens
+
 let authToken = localStorage.getItem('godeploy_token') || '';
 
-// ── Live deployment tracking per card ────────────────────────────────────────
-// liveDeployments[appName] = { depID, stageIdx, logs: [], failed: false }
+
 const liveDeployments = {};
 
-// Charts State
+
 let chartCanvas, chartCtx;
 let cpuHistory = Array(40).fill(0);
 let memHistory = Array(40).fill(0);
 let chartResizeObserver = null;
 
-// Command Palette Registry
 let cmdPaletteOpen = false;
 let cmdSelectedIndex = 0;
 const commandsRegistry = [
@@ -1822,7 +1815,7 @@ const commandsRegistry = [
   { name: 'Action: Log Out', action: () => doLogout(), shortcut: 'Q Q' }
 ];
 
-// ── Custom Oscilloscope Canvas Renderer ──────────────────────────────────────
+
 function initCharts() {
   chartCanvas = document.getElementById('telemetryChart');
   if (!chartCanvas) return;
@@ -1859,7 +1852,7 @@ function renderTelemetryChart() {
 
   ctx.clearRect(0, 0, width, height);
 
-  // Digital Screen Grid (Green/Teal Oscilloscope lines)
+
   ctx.strokeStyle = 'rgba(56, 189, 248, 0.04)';
   ctx.lineWidth = 1;
   const gridCells = 8;
@@ -1877,13 +1870,13 @@ function renderTelemetryChart() {
     ctx.stroke();
   }
 
-  // Draw data lines with glowing gradients
+
   const drawLine = (data, colorStr) => {
     const len = data.length;
     const paddingLeft = 32;
     const plotW = width - paddingLeft;
 
-    // Glowing Fill
+
     ctx.beginPath();
     for (let i = 0; i < len; i++) {
       const x = paddingLeft + (plotW / (len - 1)) * i;
@@ -1897,7 +1890,7 @@ function renderTelemetryChart() {
     ctx.fillStyle = colorStr.replace('1)', '0.04)');
     ctx.fill();
 
-    // Signal Line
+
     ctx.beginPath();
     for (let i = 0; i < len; i++) {
       const x = paddingLeft + (plotW / (len - 1)) * i;
@@ -1914,7 +1907,6 @@ function renderTelemetryChart() {
   drawLine(memHistory, 'rgba(52, 211, 153, 1)');
 }
 
-// ── API Network helper ────────────────────────────────────────────────────────
 async function api(path, opts = {}) {
   opts.headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
   if (authToken) {
@@ -1927,7 +1919,6 @@ async function api(path, opts = {}) {
   return body;
 }
 
-// ── Toast Notification center ────────────────────────────────────────────────
 function toast(msg, type = 'info') {
   const c = document.getElementById('toastContainer');
   const t = document.createElement('div');
@@ -1940,8 +1931,6 @@ function toast(msg, type = 'info') {
     setTimeout(() => t.remove(), 250);
   }, 4000);
 }
-
-// ── Auth Handling ────────────────────────────────────────────────────────────
 async function checkAuth() {
   try {
     currentUser = await api('/api/me');
@@ -2019,12 +2008,12 @@ function startUptimeTracker() {
   }, 1000);
 }
 
-// ── WebSockets with fallback query parameters for absolute robust auth ──────
+
 function connectWebSocket() {
   if (ws && ws.readyState <= 1) return;
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  // Include auth token inside WS URL query to bypass reverse proxies stripping Authorization header
+
   const tokenQuery = authToken ? `?token=${encodeURIComponent(authToken)}` : '';
   const url = `${protocol}//${window.location.host}/api/ws${tokenQuery}`;
 
@@ -2048,14 +2037,14 @@ function connectWebSocket() {
     label.textContent = 'live websocket';
     sendWS({ type: 'subscribe_metrics' });
 
-    // Auto-subscribe to all currently active/live deployments in dashboard cards
+
     for (const [appName, live] of Object.entries(liveDeployments)) {
       if (live.depID) {
         sendWS({ type: 'subscribe_logs', appName: appName, deploymentId: live.depID });
       }
     }
 
-    // Also re-subscribe active log viewer tab subscription if any
+
     if (activeLogSubscription.depID) {
       sendWS({
         type: 'subscribe_logs',
@@ -2107,15 +2096,15 @@ function handleWSMessage(msg) {
       break;
     case 'log_line': {
       const line = typeof msg.data === 'string' ? msg.data : '';
-      // Update the dedicated log terminal tab
+
       if (activeLogSubscription.depID === msg.deploymentId) {
         appendLogLine(line);
       }
-      // Also update the live card stage rail + mini-terminal
+
       if (msg.appName) {
         updateCardLive(msg.appName, msg.deploymentId, line);
       } else {
-        // appName might not be in the message — match by depID across liveDeployments
+
         for (const [name, state] of Object.entries(liveDeployments)) {
           if (state.depID === msg.deploymentId) {
             updateCardLive(name, msg.deploymentId, line);
@@ -2132,14 +2121,14 @@ function handleWSMessage(msg) {
         document.getElementById('logConnDot').style.background = 'var(--text-dim)';
         document.getElementById('logConsoleMeta').textContent = 'stream completed';
       }
-      // Mark live deployment as done then do a full card refresh
+
       for (const [name, state] of Object.entries(liveDeployments)) {
         if (state.depID === depID) {
           delete liveDeployments[name];
           break;
         }
       }
-      // Short delay so the backend persists the final state before we poll
+
       setTimeout(refresh, 800);
       break;
     }
@@ -2152,10 +2141,9 @@ function handleWSMessage(msg) {
   }
 }
 
-// ── Real-time card stage + mini-terminal updater ─────────────────────────────
-// Called on every log_line WS event for an active deployment
+
 function updateCardLive(appName, depID, line) {
-  // Ensure tracking entry exists
+
   if (!liveDeployments[appName]) {
     liveDeployments[appName] = { depID, stageIdx: 0, logs: [], failed: false };
   }
@@ -2164,7 +2152,7 @@ function updateCardLive(appName, depID, line) {
   live.logs.push(line);
   if (live.logs.length > 40) live.logs = live.logs.slice(-40);
 
-  // Detect stage advancement from log text
+
   const l = line.toLowerCase();
   if (l.includes('health check passed') || l.includes('✅ health') || (l.includes('health') && l.includes('healthy'))) {
     live.stageIdx = 6; // Done
@@ -2190,7 +2178,7 @@ function updateCardLive(appName, depID, line) {
     live.failed = false;
   }
 
-  // Update DOM for this card without full re-render
+
   updateCardRail(appName, live);
   updateCardTerminal(appName, live);
 }
@@ -2223,7 +2211,7 @@ function updateCardRail(appName, live) {
     }
   });
 
-  // Update badge on the card header safely without CSS.escape
+
   const card = document.getElementById(`app-${appName}`);
   if (card) {
     const badge = card.querySelector('.badge:last-child');
@@ -2250,7 +2238,7 @@ function updateCardTerminal(appName, live) {
   term.scrollTop = term.scrollHeight;
 }
 
-// ── Tab Management ──────────────────────────────────────────────────────────
+
 function switchTab(tabId) {
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -2300,7 +2288,6 @@ function toggleSidebar(state) {
   }
 }
 
-// ── Services Desk ───────────────────────────────────────────────────────────
 async function refresh() {
   try {
     const apps = await api('/api/apps');
@@ -2386,7 +2373,7 @@ function cardHTML(app) {
     else if (allLogs.includes('cosign') || allLogs.includes('verify') || allLogs.includes('signature')) seedState.stageIdx = 1;
     else if (allLogs.length > 0) seedState.stageIdx = 0;
     liveDeployments[app.name] = seedState;
-    // Subscribe to WS log stream for this deployment
+
     sendWS({ type: 'subscribe_logs', appName: app.name, deploymentId: dep.id });
   }
 
@@ -2395,7 +2382,6 @@ function cardHTML(app) {
     <button class="btn danger" style="padding:6px 12px; font-size:11px;" onclick="deleteApp('${app.name}')">Remove</button>
   ` : '';
 
-  // Mini-terminal: prefer live logs from WS, fallback to stored
   let terminalLogs = `<span style="color:var(--text-dim);">READY — waiting for deployment trigger...</span>`;
   if (live && live.logs.length > 0) {
     terminalLogs = live.logs.slice(-3).map(l => {
@@ -2473,11 +2459,11 @@ function railHTML(appName, state) {
   let activeIdx = -1, failed = false;
 
   if (live && live.depID) {
-    // Use real-time tracked stage from WS log stream
+
     activeIdx = live.stageIdx;
     failed = live.failed;
   } else if (dep && (dep.status === 'PENDING' || dep.status === 'PROGRESSING')) {
-    // Fall back to log keyword matching from stored logs
+
     const allLogs = (dep.logs || []).join(' ').toLowerCase();
     if (allLogs.includes('health check passed') || (allLogs.includes('health') && allLogs.includes('healthy'))) activeIdx = 6;
     else if (allLogs.includes('health check') || allLogs.includes('🩺')) activeIdx = 5;
@@ -2490,7 +2476,7 @@ function railHTML(appName, state) {
     activeIdx = STAGES.length; // All done
   } else if (dep && dep.status === 'FAILED' || sync === 'Degraded') {
     failed = true;
-    // Find which stage it failed at from stored logs
+
     const allLogs = (dep && dep.logs || []).join(' ').toLowerCase();
     if (allLogs.includes('health')) activeIdx = 5;
     else if (allLogs.includes('restart')) activeIdx = 4;
@@ -2527,19 +2513,19 @@ async function triggerSync(appName) {
     const res = await api(`/api/apps/${appName}/sync`, { method: 'POST', body: JSON.stringify({ version: ver }) });
     const depID = res.deploymentId;
     toast(`Deploying ${appName} @ ${ver}`, 'info');
-    // Immediately seed live tracker and subscribe
+
     liveDeployments[appName] = { depID, stageIdx: 0, logs: [], failed: false };
     sendWS({ type: 'subscribe_logs', appName, deploymentId: depID });
-    // Refresh cards so the card shows Progressing state
+
     setTimeout(refresh, 400);
-    // Also open the log terminal tab
+
     viewLogDirect(appName, depID);
   } catch (e) {
     toast(`Deployment failed: ${e.message}`, 'error');
   }
 }
 
-// ── Deployment History & Rollbacks ──────────────────────────────────────────
+
 async function viewHistory(appName) {
   const history = await api(`/api/apps/${appName}/deployments`).catch(() => []);
   document.getElementById('historyTitle').textContent = `Deployment Log — ${appName}`;
@@ -2587,7 +2573,7 @@ async function doRollback(appName, depId) {
     const res = await api(`/api/apps/${appName}/rollback`, { method: 'POST', body: JSON.stringify({ toDeploymentId: depId }) });
     const depID = res.deploymentId;
     toast(`Rollback started for ${appName} → target ${depId}`, 'warn');
-    // Immediately seed live tracker and subscribe WS for rollback progress
+
     liveDeployments[appName] = { depID, stageIdx: 0, logs: [], failed: false };
     sendWS({ type: 'subscribe_logs', appName, deploymentId: depID });
     setTimeout(refresh, 400);
@@ -2600,9 +2586,9 @@ async function doRollback(appName, depId) {
 function viewLogDirect(appName, depID) {
   switchTab('logs');
   setTimeout(async () => {
-    // Populate app selector
+
     const appSelect = document.getElementById('logSelectApp');
-    // make sure options are populated
+
     if (!appSelect.options.length || appSelect.value !== appName) {
       appSelect.innerHTML = currentAppList.map(a => `<option value="${a.name}">${a.name}</option>`).join('');
     }
@@ -2610,14 +2596,14 @@ function viewLogDirect(appName, depID) {
     await loadAppLogHistory();
     const depSelect = document.getElementById('logSelectDeploy');
     if (depID) {
-      // Try to select the right deployment; if not in the list yet, just subscribe directly
+
       depSelect.value = depID;
     }
     subscribeLogView();
   }, 200);
 }
 
-// ── System Health UI Updates ────────────────────────────────────────────────
+
 function updateGauge(id, valId, value) {
   const circ = 251.2;
   const offset = circ - (circ * Math.min(value, 100) / 100);
@@ -2637,11 +2623,10 @@ function updateSystemMetricsUI(data) {
   const mem = data.memoryTotal > 0 ? ((data.memoryUsed / data.memoryTotal) * 100) : 0;
   const disk = data.diskTotal > 0 ? ((data.diskUsed / data.diskTotal) * 100) : 0;
 
-  // Sidebar Sparklines
+
   document.getElementById('spark-cpu').textContent = cpu.toFixed(1) + '%';
   document.getElementById('spark-mem').textContent = mem.toFixed(1) + '%';
 
-  // Circle Gauges
   updateGauge('gaugeCpu', 'gaugeCpuVal', cpu);
   updateGauge('gaugeMem', 'gaugeMemVal', mem);
   updateGauge('gaugeDisk', 'gaugeDiskVal', disk);
@@ -2706,7 +2691,7 @@ function updateServiceMetricsUI(services) {
   container.innerHTML = html || '<div style="color:var(--text-dim); font-size:12px;">No metrics reported</div>';
 }
 
-// ── Jenkins builds visualizer ───────────────────────────────────────────────
+
 async function loadJenkinsBuildHistory() {
   try {
     const builds = await api('/api/jenkins/builds');
@@ -2799,7 +2784,7 @@ function selectJenkinsBuild(buildNumber, app) {
   pipeline.innerHTML = flowHtml;
 }
 
-// ── Log Viewer with stream play/pause controls ──────────────────────────────
+
 function populateLogsAppSelect() {
   const select = document.getElementById('logSelectApp');
   select.innerHTML = currentAppList.map(a => `<option value="${a.name}">${a.name}</option>`).join('');
@@ -2841,12 +2826,12 @@ function subscribeLogView() {
 }
 
 function appendLogLine(line) {
-  if (isLogStreamPaused) return; // Ignore updates if stream is paused
+  if (isLogStreamPaused) return; 
   activeLogLines.push(line);
   renderConsole();
 }
 
-// High Fidelity syntax highlight parsing on log text
+
 function renderConsole() {
   const consoleBody = document.getElementById('logConsoleBody');
   const levelFilter = document.getElementById('logFilterLevel').value;
@@ -2867,7 +2852,7 @@ function renderConsole() {
     else if (line.includes('✅') || line.includes('🎉') || line.includes('success')) type = 'success';
     else if (line.includes('▶') || line.includes('starting') || line.includes('download')) type = 'info';
 
-    // Parse timestamp if present like [12:47:18]
+
     let timestamp = '';
     let logText = line;
     const timeMatch = line.match(/^(\[\d{2}:\d{2}:\d{2}\])\s*(.*)/);
@@ -2923,7 +2908,6 @@ function downloadActiveLogs() {
   document.body.removeChild(a);
 }
 
-// ── Team & Auditing ──────────────────────────────────────────────────────────
 async function loadUsersTable() {
   try {
     const users = await api('/api/users').catch(() => []);
@@ -2987,7 +2971,7 @@ async function loadAuditLogs() {
     auditEvents = Array.isArray(events) ? events : [];
     renderAudits(auditEvents);
   } catch(e) {
-    // Suppress warnings on empty datasets
+
   }
 }
 
@@ -3038,7 +3022,7 @@ function addGlobalEvent(ev) {
   if (ev.level === 'error') toast(ev.message, 'error');
   else if (ev.level === 'warn') toast(ev.message, 'warn');
 
-  // Real-time integration!
+
   if (ev.type === 'jenkins_update') {
     loadJenkinsBuildHistory();
   } else if (ev.deploymentId) {
@@ -3046,7 +3030,7 @@ function addGlobalEvent(ev) {
   }
 }
 
-// ── Webhook Alert Settings ───────────────────────────────────────────────────
+
 async function saveWebhookSettings() {
   toast('Webhook configuration saved', 'success');
 }
@@ -3055,7 +3039,6 @@ function testNotificationWebhook() {
   toast('Simulated warning notification dispatch queued', 'info');
 }
 
-// ── Command Palette Logic (Ctrl+K) ──────────────────────────────────────────
 function openCmdPalette() {
   cmdPaletteOpen = true;
   cmdSelectedIndex = 0;
@@ -3099,7 +3082,7 @@ function executeCmdIndex(index) {
   }
 }
 
-// Keyboard Listeners
+
 window.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
     e.preventDefault();
@@ -3128,7 +3111,7 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-// ── Add/Edit Service Modal Operations ─────────────────────────────────────────
+
 let appModalEditing = null;
 
 function appFormHTML(app = null) {
@@ -3289,12 +3272,11 @@ async function deleteApp(name) {
   }
 }
 
-// ── General Helpers ─────────────────────────────────────────────────────────
 function escapeHTML(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// ── RHEL Installer Script Generator ──────────────────────────────────────────
+
 function generateRhelScripts() {
   const port = document.getElementById('rhel-port').value || '8090';
   const user = document.getElementById('rhel-user').value || 'godeploy';
@@ -3378,7 +3360,6 @@ server {
 `;
 }
 
-// ── Application bootstrapping ────────────────────────────────────────────────
 checkAuth();
 </script>
 </body>
