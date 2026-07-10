@@ -1,7 +1,3 @@
-// Package store persists deployment history and current/desired state to a
-// JSON file on disk (atomic write-rename), and provides an in-memory
-// publish/subscribe bus so the UI can stream a deployment's logs live via
-// Server-Sent Events instead of polling.
 package store
 
 import (
@@ -25,7 +21,7 @@ const (
 	StatusRolledBack Status = "ROLLED_BACK"
 )
 
-// SyncState mirrors ArgoCD's Synced / OutOfSync / Degraded vocabulary.
+
 type SyncState string
 
 const (
@@ -71,7 +67,7 @@ type Event struct {
 	ID           string    `json:"id"`
 	Type         string    `json:"type"`
 	Timestamp    time.Time `json:"timestamp"`
-	Level        string    `json:"level"` // info | warn | error
+	Level        string    `json:"level"` 
 	App          string    `json:"app,omitempty"`
 	DeploymentID string    `json:"deploymentId,omitempty"`
 	Message      string    `json:"message"`
@@ -79,8 +75,8 @@ type Event struct {
 
 type JenkinsStage struct {
 	Name     string `json:"name"`
-	Status   string `json:"status"`   // SUCCESS | FAILED | RUNNING | PENDING
-	Duration int    `json:"duration"` // seconds
+	Status   string `json:"status"`  
+	Duration int    `json:"duration"` 
 }
 
 type JenkinsBuild struct {
@@ -88,7 +84,7 @@ type JenkinsBuild struct {
 	App         string         `json:"app"`
 	GitCommit   string         `json:"gitCommit"`
 	TriggeredBy string         `json:"triggeredBy"`
-	Status      string         `json:"status"` // SUCCESS | FAILED | RUNNING
+	Status      string         `json:"status"` 
 	StartedAt   time.Time      `json:"startedAt"`
 	Stages      []JenkinsStage `json:"stages"`
 }
@@ -105,11 +101,11 @@ type Store struct {
 	mu      sync.RWMutex
 	path    string
 	d       data
-	subs    map[string][]chan string // deploymentID -> subscriber channels for live logs
+	subs    map[string][]chan string 
 	subsMu  sync.Mutex
 	maxHist int
 
-	// global event subscribers (for /api/events/stream SSE)
+
 	evSubs   map[chan Event]struct{}
 	evSubsMu sync.Mutex
 }
@@ -189,7 +185,6 @@ func (s *Store) AllAppStates() map[string]AppState {
 	return out
 }
 
-// StartDeployment records a new PENDING deployment and returns it.
 func (s *Store) StartDeployment(app, version, artifactURL, commit, triggeredBy, reason string) Deployment {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -216,7 +211,7 @@ func (s *Store) StartDeployment(app, version, artifactURL, commit, triggeredBy, 
 	return dep
 }
 
-// AppendLog adds a line to a deployment's log and fans it out to SSE subscribers.
+
 func (s *Store) AppendLog(depID, line string) {
 	s.mu.Lock()
 	for _, as := range s.d.Apps {
@@ -237,7 +232,7 @@ func (s *Store) AppendLog(depID, line string) {
 	s.subsMu.Unlock()
 }
 
-// FinishDeployment marks the deployment terminal, updates sync state, and closes subscribers.
+
 func (s *Store) FinishDeployment(depID, app string, status Status, backupPath string) {
 	s.mu.Lock()
 	as := s.d.Apps[app]
@@ -299,7 +294,7 @@ func (s *Store) SetLastError(app, errMsg string) {
 	_ = s.persistLocked()
 }
 
-// --- Dynamic app CRUD ---
+
 
 func (s *Store) ListDynamicApps() []config.App {
 	s.mu.RLock()
@@ -335,7 +330,6 @@ func (s *Store) DeleteDynamicApp(name string) error {
 	return s.persistLocked()
 }
 
-// --- User CRUD ---
 
 func (s *Store) ListUsers() []User {
 	s.mu.RLock()
@@ -371,9 +365,7 @@ func (s *Store) DeleteUser(username string) error {
 	return s.persistLocked()
 }
 
-// --- Global event (notification) feed ---
 
-// PushEvent persists an event and fans it out to all SSE event subscribers.
 func (s *Store) PushEvent(event Event) error {
 	s.mu.Lock()
 	event.ID = fmt.Sprintf("evt-%d", time.Now().UnixNano())
@@ -385,7 +377,6 @@ func (s *Store) PushEvent(event Event) error {
 	_ = s.persistLocked()
 	s.mu.Unlock()
 
-	// fan out to SSE subscribers
 	s.evSubsMu.Lock()
 	for ch := range s.evSubs {
 		select {
@@ -403,7 +394,7 @@ func (s *Store) ListEvents() []Event {
 	return append([]Event(nil), s.d.Events...)
 }
 
-// SubscribeEvents returns a channel that receives live events. Call UnsubscribeEvents to clean up.
+
 func (s *Store) SubscribeEvents() chan Event {
 	ch := make(chan Event, 64)
 	s.evSubsMu.Lock()
@@ -412,18 +403,14 @@ func (s *Store) SubscribeEvents() chan Event {
 	return ch
 }
 
-// UnsubscribeEvents removes a channel from the event fan-out.
+
 func (s *Store) UnsubscribeEvents(ch chan Event) {
 	s.evSubsMu.Lock()
 	delete(s.evSubs, ch)
 	s.evSubsMu.Unlock()
 }
 
-// --- Deployment log streaming ---
 
-// Subscribe returns a channel of log lines for a (possibly still running)
-// deployment. Replays what's already been logged, then streams new lines
-// until the deployment finishes or the caller stops reading.
 func (s *Store) Subscribe(depID string) (<-chan string, []string) {
 	s.mu.RLock()
 	var existing []string
@@ -431,7 +418,7 @@ func (s *Store) Subscribe(depID string) (<-chan string, []string) {
 		if as.LastDeployment != nil && as.LastDeployment.ID == depID {
 			existing = append(existing, as.LastDeployment.Logs...)
 		}
-		// Also check history in case the deployment already finished
+
 		for _, dep := range as.History {
 			if dep.ID == depID {
 				if len(existing) == 0 {
@@ -449,12 +436,11 @@ func (s *Store) Subscribe(depID string) (<-chan string, []string) {
 	return ch, existing
 }
 
-// --- Jenkins Builds ---
 
 func (s *Store) SaveJenkinsBuild(b JenkinsBuild) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// Find and update if exists, otherwise append
+
 	found := false
 	for i, jb := range s.d.JenkinsBuilds {
 		if jb.BuildNumber == b.BuildNumber && jb.App == b.App {
