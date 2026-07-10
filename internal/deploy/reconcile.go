@@ -12,11 +12,7 @@ import (
 	"godeploy/internal/store"
 )
 
-// Reconciler continuously compares each "auto" sync-policy app's desired
-// state (the latest version published to Nexus) against its currently
-// deployed version, and triggers a deploy whenever they drift — the same
-// pull-based control loop ArgoCD runs for Kubernetes manifests, applied
-// here to a signed build artifact and a systemd unit.
+
 type Reconciler struct {
 	reg    *registry.Registry
 	engine *Engine
@@ -56,8 +52,6 @@ func (r *Reconciler) loop(app config.App) {
 func (r *Reconciler) reconcileOnce(app config.App) {
 	latest, err := fetchLatestVersion(app)
 	if err != nil {
-		// Can't determine desired state — leave sync status alone rather
-		// than guessing, but don't spam a deploy attempt.
 		return
 	}
 	as, _ := r.st.GetAppState(app.Name)
@@ -67,7 +61,7 @@ func (r *Reconciler) reconcileOnce(app config.App) {
 	}
 	r.st.SetSyncState(app.Name, store.SyncStateOutOfSync)
 	if !app.SyncPolicy.SelfHeal {
-		return // OutOfSync is surfaced in the UI; a human clicks Sync
+		return 
 	}
 	_, _ = r.engine.Trigger(Request{
 		AppName:     app.Name,
@@ -77,11 +71,6 @@ func (r *Reconciler) reconcileOnce(app config.App) {
 	})
 }
 
-// fetchLatestVersion reads a small marker file conventionally published
-// alongside artifacts: <nexus>/repository/<repo>/<groupPath>/latest.txt
-// containing exactly the latest version string. This keeps the controller
-// dependency-free (no XML/maven-metadata parsing) while still giving CI a
-// one-line contract to fulfil: `echo $VERSION > latest.txt` after publish.
 func fetchLatestVersion(app config.App) (string, error) {
 	url := fmt.Sprintf("%s/repository/%s/%s/latest.txt", app.Nexus.URL, app.Nexus.Repo, app.Nexus.GroupPath)
 	client := &http.Client{Timeout: 10 * time.Second}
