@@ -1,9 +1,3 @@
-// Package deploy implements the actual reconciliation work: pull a signed
-// artifact, verify it, ship it to the target host, cut a backup, restart
-// the systemd unit, verify health, and auto-rollback on failure. It is the
-// Go-native replacement for the pipeline's raw `sshpass scp / ssh systemctl`
-// block — but with locking, verification, history and self-healing built in
-// instead of bolted onto shell script.
 package deploy
 
 import (
@@ -30,7 +24,7 @@ type Engine struct {
 	notifier *notify.Notifier
 
 	locksMu sync.Mutex
-	locks   map[string]*sync.Mutex // one lock per app, so concurrent deploys of the same app queue instead of racing
+	locks   map[string]*sync.Mutex 
 }
 
 func New(reg *registry.Registry, st *store.Store, n *notify.Notifier) *Engine {
@@ -48,18 +42,15 @@ func (e *Engine) lockFor(app string) *sync.Mutex {
 	return l
 }
 
-// Request describes a single deploy/sync request.
 type Request struct {
 	AppName     string
-	Version     string // target version identifier (e.g. maven version, build number)
-	ArtifactURL string // optional explicit override; if empty it's derived from Nexus config + version
+	Version     string 
+	ArtifactURL string
 	GitCommit   string
 	TriggeredBy string
 	Reason      string
 }
 
-// Trigger starts a deployment asynchronously and returns immediately with
-// the deployment ID the caller can use to stream logs / poll status.
 func (e *Engine) Trigger(req Request) (string, error) {
 	app, ok := e.reg.FindApp(req.AppName)
 	if !ok {
@@ -104,14 +95,14 @@ func (e *Engine) run(app config.App, depID, version, artifactURL, commit, trigge
 
 		// Push a global notification for the outcome
 		level := "info"
-		msg := fmt.Sprintf("✅ deployment of %q version %s succeeded", app.Name, version)
+		msg := fmt.Sprintf(" deployment of %q version %s succeeded", app.Name, version)
 		switch finalStatus {
 		case store.StatusFailed:
 			level = "error"
-			msg = fmt.Sprintf("❌ deployment of %q version %s FAILED", app.Name, version)
+			msg = fmt.Sprintf(" deployment of %q version %s FAILED", app.Name, version)
 		case store.StatusRolledBack:
 			level = "warn"
-			msg = fmt.Sprintf("↩️ deployment of %q rolled back to previous version", app.Name)
+			msg = fmt.Sprintf(" deployment of %q rolled back to previous version", app.Name)
 		}
 		_ = e.st.PushEvent(store.Event{Level: level, App: app.Name, DeploymentID: depID, Message: msg})
 	}()
@@ -119,10 +110,9 @@ func (e *Engine) run(app config.App, depID, version, artifactURL, commit, trigge
 
 	e.log(depID, "▶ starting deploy of %s version %s", app.Name, version)
 
-	// 1. Download artifact
 	tmpDir, err := os.MkdirTemp("", "godeploy-"+app.Name+"-")
 	if err != nil {
-		e.log(depID, "🛑 could not create temp dir: %v", err)
+		e.log(depID, " could not create temp dir: %v", err)
 		return
 	}
 	defer os.RemoveAll(tmpDir)
@@ -130,22 +120,21 @@ func (e *Engine) run(app config.App, depID, version, artifactURL, commit, trigge
 	localArtifact := filepath.Join(tmpDir, app.Target.BinaryName)
 	e.log(depID, "⬇ downloading artifact from %s", artifactURL)
 	if err := downloadFile(artifactURL, localArtifact, app.Nexus.Username, app.Nexus.Password); err != nil {
-		e.log(depID, "🛑 artifact download failed: %v", err)
+		e.log(depID, " artifact download failed: %v", err)
 		return
 	}
-	e.log(depID, "✅ artifact downloaded (%s)", humanSize(localArtifact))
+	e.log(depID, " artifact downloaded (%s)", humanSize(localArtifact))
 
-	// 2. Verify signature (cosign), if configured
 	if app.Cosign.PublicKeyPath != "" {
 		sigURL := artifactURL + ".sig"
 		certURL := artifactURL + ".pem"
 		sigPath := localArtifact + ".sig"
 		certPath := localArtifact + ".pem"
-		e.log(depID, "🔏 fetching signature for verification")
+		e.log(depID, " fetching signature for verification")
 		sigErr := downloadFile(sigURL, sigPath, app.Nexus.Username, app.Nexus.Password)
 		certErr := downloadFile(certURL, certPath, app.Nexus.Username, app.Nexus.Password)
 		if sigErr != nil || certErr != nil {
-			e.log(depID, "🛑 could not fetch signature/certificate — refusing to deploy an unverifiable artifact")
+			e.log(depID, " could not fetch signature/certificate — refusing to deploy an unverifiable artifact")
 			return
 		}
 		out, err := runCmd(30*time.Second, "cosign", "verify-blob",
@@ -154,23 +143,22 @@ func (e *Engine) run(app config.App, depID, version, artifactURL, commit, trigge
 			localArtifact,
 		)
 		if err != nil {
-			e.log(depID, "🛑 cosign verification FAILED: %v\n%s", err, out)
+			e.log(depID, " cosign verification FAILED: %v\n%s", err, out)
 			return
 		}
-		e.log(depID, "✅ signature verified against %s", app.Cosign.PublicKeyPath)
+		e.log(depID, "signature verified against %s", app.Cosign.PublicKeyPath)
 	} else {
-		e.log(depID, "⚠️ no cosign public key configured for %s — skipping signature verification", app.Name)
+		e.log(depID, "no cosign public key configured for %s — skipping signature verification", app.Name)
 	}
 
 	sshTarget := fmt.Sprintf("%s@%s", app.Target.User, app.Target.Host)
 	sshBase, scpBase, cleanup, err := sshArgs(app.Target)
 	if err != nil {
-		e.log(depID, "🛑 ssh auth setup failed: %v", err)
+		e.log(depID, "ssh auth setup failed: %v", err)
 		return
 	}
 	defer cleanup()
 
-	// 3. Backup existing binary on remote
 	ts := time.Now().Format("02-01-2006-150405")
 	backupPath = fmt.Sprintf("%s/%s-%s%s", app.Target.BackupDir, app.Target.BinaryName, ts, "")
 	remoteBin := filepath.Join(app.Target.RemotePath, app.Target.BinaryName)
@@ -183,60 +171,57 @@ else
   echo "no existing artifact to back up"
 fi`, app.Target.BackupDir, remoteBin, sudoPrefix(app.Target), remoteBin, backupPath, backupPath)
 
-	e.log(depID, "📁 backing up current artifact on %s", app.Target.Host)
+	e.log(depID, " backing up current artifact on %s", app.Target.Host)
 	out, err := sshRun(sshBase, sshTarget, backupScript)
 	if err != nil {
-		e.log(depID, "🛑 backup step failed: %v\n%s", err, out)
+		e.log(depID, " backup step failed: %v\n%s", err, out)
 		return
 	}
 	e.log(depID, "%s", trimmed(out))
 
-	// 4. Ship new artifact
-	e.log(depID, "📦 uploading new artifact to %s:%s", app.Target.Host, app.Target.RemotePath)
+	e.log(depID, " uploading new artifact to %s:%s", app.Target.Host, app.Target.RemotePath)
 	if err := scpRun(scpBase, localArtifact, sshTarget, app.Target.RemotePath+"/"); err != nil {
-		e.log(depID, "🛑 upload failed: %v", err)
+		e.log(depID, " upload failed: %v", err)
 		e.attemptRestore(depID, app, sshBase, backupPath, remoteBin)
 		return
 	}
-	e.log(depID, "✅ upload complete")
+	e.log(depID, " upload complete")
 
-	// 5. Restart service
 	restartScript := fmt.Sprintf("set -e\n%s systemctl restart %s\nsleep 3\n%s systemctl is-active %s",
 		sudoPrefix(app.Target), app.Target.ServiceName, sudoPrefix(app.Target), app.Target.ServiceName)
-	e.log(depID, "🚀 restarting %s", app.Target.ServiceName)
+	e.log(depID, " restarting %s", app.Target.ServiceName)
 	out, err = sshRun(sshBase, sshTarget, restartScript)
 	if err != nil {
-		e.log(depID, "🛑 service restart failed: %v\n%s", err, out)
+		e.log(depID, " service restart failed: %v\n%s", err, out)
 		e.attemptRestore(depID, app, sshBase, backupPath, remoteBin)
 		return
 	}
 	e.log(depID, "%s", trimmed(out))
 
-	// 6. Health check with retries
 	if app.HealthCheck.URL != "" {
 		e.log(depID, "🩺 running health check against %s", app.HealthCheck.URL)
 		ok := waitHealthy(app.HealthCheck, func(msg string) { e.log(depID, "%s", msg) })
 		if !ok {
-			e.log(depID, "🔴 health check did not pass after %d attempt(s)", maxi(app.HealthCheck.Retries, 1))
+			e.log(depID, " health check did not pass after %d attempt(s)", maxi(app.HealthCheck.Retries, 1))
 			if app.AutoRollbackOnFailedHealth && backupPath != "" {
-				e.log(depID, "↩️ auto-rollback enabled — restoring previous artifact")
+				e.log(depID, " auto-rollback enabled — restoring previous artifact")
 				if e.restore(sshBase, scpBase, backupPath, remoteBin, app) == nil {
 					_, _ = sshRun(sshBase, sshTarget, fmt.Sprintf("%s systemctl restart %s", sudoPrefix(app.Target), app.Target.ServiceName))
-					e.log(depID, "✅ rolled back to previous artifact and restarted service")
+					e.log(depID, " rolled back to previous artifact and restarted service")
 					finalStatus = store.StatusRolledBack
 					return
 				}
-				e.log(depID, "🛑 rollback restore also failed — manual intervention required")
+				e.log(depID, " rollback restore also failed — manual intervention required")
 			}
 			finalStatus = store.StatusFailed
 			return
 		}
-		e.log(depID, "✅ health check passed")
+		e.log(depID, " health check passed")
 	} else {
-		e.log(depID, "⚠️ no health check configured — trusting systemctl is-active result only")
+		e.log(depID, " no health check configured — trusting systemctl is-active result only")
 	}
 
-	e.log(depID, "🎉 deployment SUCCESS — %s now running version %s", app.Name, version)
+	e.log(depID, " deployment SUCCESS — %s now running version %s", app.Name, version)
 	finalStatus = store.StatusSuccess
 
 	e.pruneBackups(sshBase, sshTarget, app)
@@ -246,13 +231,13 @@ func (e *Engine) attemptRestore(depID string, app config.App, sshBase []string, 
 	if backupPath == "" {
 		return
 	}
-	e.log(depID, "↩️ attempting to restore previous artifact after failure")
+	e.log(depID, "attempting to restore previous artifact after failure")
 	script := fmt.Sprintf("set -e\nif [ -f %q ]; then %s mv %q %q; echo restored; else echo 'no backup to restore'; fi",
 		backupPath, sudoPrefix(app.Target), backupPath, remoteBin)
 	sshTarget := fmt.Sprintf("%s@%s", app.Target.User, app.Target.Host)
 	out, err := sshRun(sshBase, sshTarget, script)
 	if err != nil {
-		e.log(depID, "🛑 restore failed too: %v\n%s", err, out)
+		e.log(depID, " restore failed too: %v\n%s", err, out)
 		return
 	}
 	e.log(depID, "%s", trimmed(out))
@@ -265,8 +250,6 @@ func (e *Engine) restore(sshBase, _ []string, backupPath, remoteBin string, app 
 	return err
 }
 
-// pruneBackups keeps only the most recent KeepBackups files in the remote
-// backup directory for this app, oldest deleted first.
 func (e *Engine) pruneBackups(sshBase []string, sshTarget string, app config.App) {
 	keep := app.KeepBackups
 	if keep <= 0 {
@@ -279,7 +262,6 @@ func (e *Engine) pruneBackups(sshBase []string, sshTarget string, app config.App
 	_, _ = sshRun(sshBase, sshTarget, script)
 }
 
-// --- helpers -----------------------------------------------------------
 
 func sudoPrefix(t config.Target) string {
 	if t.UseSudo {
@@ -352,10 +334,6 @@ func runCmd(timeout time.Duration, name string, args ...string) (string, error) 
 	return string(out), err
 }
 
-// sshArgs builds the base ssh/scp argument slices for a target: key-based
-// auth is preferred; if no key is configured it falls back to sshpass with
-// a password sourced from an environment variable (never from the config
-// file directly), matching how the existing pipeline supplies credentials.
 func sshArgs(t config.Target) (sshBase, scpBase []string, cleanup func(), err error) {
 	cleanup = func() {}
 	port := t.Port
@@ -378,7 +356,7 @@ func sshArgs(t config.Target) (sshBase, scpBase []string, cleanup func(), err er
 	}
 	sshBase = []string{"sshpass", "-e", "ssh", "-p", fmt.Sprintf("%d", port), "-o", "StrictHostKeyChecking=no"}
 	scpBase = []string{"sshpass", "-e", "scp", "-P", fmt.Sprintf("%d", port), "-o", "StrictHostKeyChecking=no"}
-	// sshpass -e reads the password from the SSHPASS env var.
+
 	if err := os.Setenv("SSHPASS", pass); err != nil {
 		return nil, nil, cleanup, err
 	}
@@ -407,7 +385,7 @@ func waitHealthy(hc config.HealthCheck, logf func(string)) bool {
 	}
 	client := &http.Client{
 		Timeout: hc.Timeout(),
-		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}, //nolint: internal infra, self-signed certs common
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}, 
 	}
 	for i := 1; i <= retries; i++ {
 		resp, err := client.Get(hc.URL)
