@@ -1,6 +1,4 @@
-// Package api exposes godeploy's REST + SSE surface: everything the web UI
-// (and Jenkins, via the webhook endpoint) needs to trigger and observe
-// deployments.
+
 package api
 
 import (
@@ -55,7 +53,7 @@ func (a *API) withAuth(next http.HandlerFunc) http.HandlerFunc {
 			next(w, a.authMgr.WithUserContext(r, user))
 			return
 		}
-		// Allow static bearer token fallback for backward compat / scripts
+
 		if a.cfg.Auth.ResolvedToken() != "" {
 			got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 			if got == "" {
@@ -184,7 +182,6 @@ func (a *API) handleEventsStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	// Send recent events on connect
 	recent := a.st.ListEvents()
 	for _, ev := range recent {
 		b, _ := json.Marshal(ev)
@@ -299,7 +296,7 @@ func (a *API) handleDeleteApp(w http.ResponseWriter, r *http.Request, name strin
 	if !ok {
 		return
 	}
-	// Only dynamic apps can be deleted via the UI
+
 	if _, ok := a.st.GetDynamicApp(name); !ok {
 		writeErr(w, http.StatusForbidden, "only dynamically-added apps can be deleted; edit the config file to remove static apps")
 		return
@@ -312,7 +309,6 @@ func (a *API) handleDeleteApp(w http.ResponseWriter, r *http.Request, name strin
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// handleAppSubroutes dispatches /api/apps/{name}[/action]
 func (a *API) handleAppSubroutes(w http.ResponseWriter, r *http.Request) {
 	rest := strings.TrimPrefix(r.URL.Path, "/api/apps/")
 	parts := strings.SplitN(rest, "/", 2)
@@ -373,7 +369,7 @@ func (a *API) handleUsers(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		users := a.st.ListUsers()
-		// Strip password hashes from the response
+	
 		type safeUser struct {
 			Username string `json:"username"`
 			Role     string `json:"role"`
@@ -629,7 +625,7 @@ func jsonEscapeSSE(s string) string {
 	return string(b)
 }
 
-// --- New Telemetry & CI Webhook APIs ---
+
 
 func (a *API) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -691,7 +687,7 @@ func (a *API) handleJenkinsStagesWebhook(w http.ResponseWriter, r *http.Request)
 	}
 	a.st.SaveJenkinsBuild(build)
 
-	// Broadcast event of Jenkins build update
+
 	_ = a.st.PushEvent(store.Event{
 		Level:   "info",
 		App:     p.App,
