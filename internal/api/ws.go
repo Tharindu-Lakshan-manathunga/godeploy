@@ -14,19 +14,19 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		return true // embedded app runs on same host/port, but allow dev environments
+		return true 
 	},
 }
 
 type wsMessage struct {
-	Type         string          `json:"type"`                   // subscribe_logs, unsubscribe_logs, subscribe_metrics, unsubscribe_metrics
+	Type         string          `json:"type"`                   
 	AppName      string          `json:"appName,omitempty"`      // for logs
 	DeploymentID string          `json:"deploymentId,omitempty"` // for logs
 	Payload      json.RawMessage `json:"payload,omitempty"`
 }
 
 type wsResponse struct {
-	Type         string `json:"type"`                   // log_line, log_done, system_metrics, service_metrics, event, jenkins_update
+	Type         string `json:"type"`                 
 	AppName      string `json:"appName,omitempty"`      // for logs
 	DeploymentID string `json:"deploymentId,omitempty"` // for logs
 	Data         any    `json:"data,omitempty"`
@@ -40,7 +40,7 @@ func (a *API) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	// Client tracking state
+
 	var (
 		mu              sync.Mutex
 		subbedLogs      bool
@@ -54,23 +54,23 @@ func (a *API) handleWS(w http.ResponseWriter, r *http.Request) {
 	logCancel = make(chan struct{})
 	metricsCancel = make(chan struct{})
 
-	// helper to send messages safely across goroutines
+	
 	send := func(msg wsResponse) error {
 		mu.Lock()
 		defer mu.Unlock()
 		return conn.WriteJSON(msg)
 	}
 
-	// 1. Subscribe to global system events to fan them out to the client in real-time
+
 	evCh := a.st.SubscribeEvents()
 	defer a.st.UnsubscribeEvents(evCh)
 
-	// Spin up goroutine to read client commands
+
 	go func() {
 		for {
 			_, msgBytes, err := conn.ReadMessage()
 			if err != nil {
-				// Client disconnected
+			
 				mu.Lock()
 				close(logCancel)
 				close(metricsCancel)
@@ -86,7 +86,6 @@ func (a *API) handleWS(w http.ResponseWriter, r *http.Request) {
 			switch req.Type {
 			case "subscribe_logs":
 				mu.Lock()
-				// Cancel previous log subscription if any
 				close(logCancel)
 				logCancel = make(chan struct{})
 				subbedLogs = true
@@ -95,10 +94,8 @@ func (a *API) handleWS(w http.ResponseWriter, r *http.Request) {
 				localCancel := logCancel
 				mu.Unlock()
 
-				// Start streaming logs in a new goroutine
 				go func(appName, depID string, cancel chan struct{}) {
 					ch, existing := a.st.Subscribe(depID)
-					// First replay existing logs
 					for _, line := range existing {
 						select {
 						case <-cancel:
@@ -113,7 +110,6 @@ func (a *API) handleWS(w http.ResponseWriter, r *http.Request) {
 						}
 					}
 
-					// Then stream incoming lines
 					for {
 						select {
 						case <-cancel:
@@ -155,12 +151,10 @@ func (a *API) handleWS(w http.ResponseWriter, r *http.Request) {
 					localCancel := metricsCancel
 					mu.Unlock()
 
-					// Start telemetry streams
 					go func(cancel chan struct{}) {
 						ticker := time.NewTicker(2 * time.Second)
 						defer ticker.Stop()
 
-						// Immediate push
 						pushMetrics(a, send)
 
 						for {
@@ -188,7 +182,6 @@ func (a *API) handleWS(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// Stream global events (notifications) to the socket
 	for {
 		select {
 		case ev, ok := <-evCh:
@@ -199,20 +192,19 @@ func (a *API) handleWS(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case <-logCancel:
-			// check loop to prevent blocking if event loop is idle
+
 		}
 	}
 }
 
 func pushMetrics(a *API, send func(wsResponse) error) {
-	// Gather system metrics
+
 	sys := GetSystemMetrics()
 	_ = send(wsResponse{
 		Type: "system_metrics",
 		Data: sys,
 	})
 
-	// Gather service metrics for each configured app
 	apps, _ := a.reg.AllApps()
 	srvMap := make(map[string]ServiceMetrics)
 	for _, app := range apps {
